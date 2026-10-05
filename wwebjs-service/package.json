@@ -1,0 +1,19 @@
+{
+  "name": "wwebjs-service",
+  "version": "1.0.0",
+  "description": "WhatsApp microservice for Complaint Manager ERP using whatsapp-web.js",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "cors": "^2.8.5",
+    "qrcode": "^1.5.3",
+    "qrcode-terminal": "^0.12.0",
+    "whatsapp-web.js": "^1.26.0"
+  },
+  "allowScripts": {
+    "puppeteer@24.38.0": true
+  }
+}

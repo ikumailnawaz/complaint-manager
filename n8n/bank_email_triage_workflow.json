@@ -1,0 +1,191 @@
+{
+  "name": "Bank Email Triage & Gemini AI Ticket Ingestion",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "mailbox": "INBOX",
+        "format": "resolved",
+        "options": {
+          "downloadAttachments": false
+        }
+      },
+      "id": "1",
+      "name": "IMAP Email Read (Bank Inbox)",
+      "type": "n8n-nodes-base.emailReadImap",
+      "typeVersion": 2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Anti-spam deduplication & header cleanup\nconst item = items[0].json;\nconst subject = item.subject || '';\nconst from = item.from || '';\nconst text = item.text || item.html || '';\n\n// Basic spam filter\nif (!subject || subject.toLowerCase().includes('unsubscribe') || subject.toLowerCase().includes('marketing')) {\n  return [];\n}\n\nreturn [{\n  json: {\n    subject: subject,\n    from_email: from,\n    body: text.substring(0, 4000),\n    received_at: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "2",
+      "name": "Anti-Spam & Payload Clean",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "key",
+              "value": "={{$env.GEMINI_API_KEY || 'YOUR_GEMINI_API_KEY'}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"contents\": [\n    {\n      \"role\": \"user\",\n      \"parts\": [\n        {\n          \"text\": \"Analyze this bank complaint email and output strict JSON with keys: type (complaint/inquiry/spam), bank_name, branch_name, branch_location (city), customer_name, customer_mobile, customer_email, machine_type (ATM/CDM/POS/Kiosk/Server), machine_model, machine_serial_no, warranty_hint (in_warranty/out_of_warranty), customer_ref_no (any ticket or ref code), urgency (high/medium/low), issue_summary (concise one line summary).\\n\\nSubject: \" + $json.subject + \"\\nSender: \" + $json.from_email + \"\\nBody:\\n\" + $json.body\n        }\n      ]\n    }\n  ],\n  \"generationConfig\": {\n    \"temperature\": 0.1,\n    \"response_mime_type\": \"application/json\"\n  }\n}",
+        "options": {}
+      },
+      "id": "3",
+      "name": "Gemini 1.5 Flash (AI Triage)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "const response = items[0].json;\nconst candidateText = response.candidates?.[0]?.content?.parts?.[0]?.text || '{}';\nlet extracted = {};\ntry {\n  extracted = JSON.parse(candidateText);\n} catch (e) {\n  extracted = {\n    type: 'complaint',\n    issue_summary: 'Unable to parse JSON from AI, manual review required'\n  };\n}\n\nreturn [{\n  json: {\n    is_complaint: (extracted.type === 'complaint'),\n    extracted_data: extracted,\n    original_subject: $('Anti-Spam & Payload Clean').item.json.subject,\n    original_body: $('Anti-Spam & Payload Clean').item.json.body,\n    from_email: $('Anti-Spam & Payload Clean').item.json.from_email\n  }\n}];"
+      },
+      "id": "4",
+      "name": "Parse Gemini JSON",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.is_complaint}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "5",
+      "name": "Is It a Complaint?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.APP_URL || 'http://127.0.0.1:8000'}}/api/v1/tickets/ingest",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "X-Webhook-Secret",
+              "value": "={{$env.N8N_WEBHOOK_SECRET || ''}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"subject\": $json.original_subject,\n  \"body\": $json.original_body,\n  \"from_email\": $json.from_email,\n  \"extracted_data\": $json.extracted_data\n}",
+        "options": {}
+      },
+      "id": "6",
+      "name": "Post to Laravel Ingest API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1360, 220]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Non-complaint logger or auto-reply trigger\nreturn [{\n  json: {\n    status: 'archived',\n    reason: 'Non-complaint or inquiry',\n    email: $json.from_email\n  }\n}];"
+      },
+      "id": "7",
+      "name": "Archive / Non-Complaint",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1360, 400]
+    }
+  ],
+  "connections": {
+    "IMAP Email Read (Bank Inbox)": {
+      "main": [
+        [
+          {
+            "node": "Anti-Spam & Payload Clean",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anti-Spam & Payload Clean": {
+      "main": [
+        [
+          {
+            "node": "Gemini 1.5 Flash (AI Triage)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini 1.5 Flash (AI Triage)": {
+      "main": [
+        [
+          {
+            "node": "Parse Gemini JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Gemini JSON": {
+      "main": [
+        [
+          {
+            "node": "Is It a Complaint?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is It a Complaint?": {
+      "main": [
+        [
+          {
+            "node": "Post to Laravel Ingest API",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Archive / Non-Complaint",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {}
+}
