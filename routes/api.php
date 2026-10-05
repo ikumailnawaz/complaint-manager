@@ -38,6 +38,12 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
 
     // Preventive Maintenance
     Route::get('/engineer/pm-tasks', [MobileApiController::class, 'getPmTasks'])->name('api.engineer.pm-tasks');
+    Route::post('/engineer/pm-tasks/{id}/complete', [MobileApiController::class, 'completePmTask'])->name('api.engineer.pm-tasks.complete');
+
+    // Spare Part Requests
+    Route::get('/engineer/part-requests', [MobileApiController::class, 'getPartRequests'])->name('api.engineer.part-requests');
+    Route::post('/engineer/part-requests', [MobileApiController::class, 'submitPartRequest'])->name('api.engineer.part-requests.store');
+    Route::get('/engineer/parts-catalog', [MobileApiController::class, 'getPartsCatalog'])->name('api.engineer.parts-catalog');
 });
 
 // n8n Webhook / Email Ingestion API

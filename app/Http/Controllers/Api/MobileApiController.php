@@ -259,9 +259,10 @@ class MobileApiController extends Controller
                 }),
                 'part_requests'      => $ticket->partRequests->map(function ($pr) {
                     return [
-                        'id'         => $pr->id,
-                        'request_no' => $pr->request_no,
-                        'status'     => $pr->status,
+                        'id'           => $pr->id,
+                        'request_no'   => $pr->request_number,
+                        'status'       => $pr->status,
+                        'status_label' => $pr->status_label,
                         'items'      => $pr->items->map(fn($item) => [
                             'part_name'        => $item->part?->name,
                             'part_number'      => $item->part?->part_number,
@@ -595,22 +596,264 @@ class MobileApiController extends Controller
                   ->orWhere(fn($q2) => $q2->whereNull('assigned_engineer_id')
                       ->whereHas('machine', fn($m) => $m->where('assigned_engineer_id', $user->id)));
             })
-            ->with(['machine'])
+            ->with(['machine.machineModel'])
             ->orderBy('next_due_date')
-            ->paginate(15);
+            ->get();
+
+        $today = Carbon::today();
+
+        $mapped = $tasks->map(function ($s) use ($today) {
+            $due = $s->next_due_date;
+            $daysUntil = $due ? (int) $today->diffInDays($due, false) : null;
+            return [
+                'id'                => $s->id,
+                'title'             => $s->title ?: 'Preventive Maintenance',
+                'bank_name'         => $s->machine?->bank_name,
+                'location'          => $s->machine?->location,
+                'machine_model'     => $s->machine?->machineModel?->name,
+                'machine_type'      => $s->machine?->machineModel?->machine_type,
+                'serial_no'         => $s->machine?->serial_number,
+                'asset_tag'         => $s->machine?->asset_tag,
+                'frequency_days'    => $s->frequency_days,
+                'frequency_label'   => $s->frequency_label,
+                'last_performed_at' => $s->last_performed_at?->format('d M Y'),
+                'next_due_date'     => $due?->format('d M Y'),
+                'days_until_due'    => $daysUntil,
+                'is_overdue'        => $daysUntil !== null && $daysUntil < 0,
+                'is_due_soon'       => $daysUntil !== null && $daysUntil >= 0 && $daysUntil <= 7,
+            ];
+        })->values();
 
         return response()->json([
             'success' => true,
-            'tasks'   => $tasks->map(function ($s) {
+            'summary' => [
+                'total'    => $mapped->count(),
+                'overdue'  => $mapped->where('is_overdue', true)->count(),
+                'due_soon' => $mapped->where('is_due_soon', true)->count(),
+            ],
+            'tasks'   => $mapped,
+        ]);
+    }
+
+    /**
+     * 12. Complete a Preventive Maintenance Task
+     */
+    public function completePmTask($id, Request $request)
+    {
+        $user = $request->user();
+        $schedule = PmSchedule::with('machine')->findOrFail($id);
+
+        $isResponsible = $schedule->assigned_engineer_id === $user->id
+            || ($schedule->assigned_engineer_id === null && $schedule->machine?->assigned_engineer_id === $user->id);
+
+        if ($user->isEngineer() && !$isResponsible) {
+            return response()->json(['success' => false, 'message' => 'This PM task is not assigned to you.'], 403);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'notes'    => 'nullable|string|max:2000',
+            'document' => 'nullable|file|mimes:pdf,jpg,jpeg,png,webp|max:15360',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation error.',
+                'errors'  => $validator->errors(),
+            ], 422);
+        }
+
+        $now = Carbon::now();
+        $isOverdue = $schedule->next_due_date && $schedule->next_due_date->lt($now->copy()->startOfDay());
+
+        $docPath = null;
+        $docName = null;
+        if ($request->hasFile('document')) {
+            $file = $request->file('document');
+            $docName = $file->getClientOriginalName();
+            $docPath = $file->store('pm-documents', 'public');
+        }
+
+        PmRecord::create([
+            'pm_schedule_id'         => $schedule->id,
+            'pm_machine_id'          => $schedule->pm_machine_id,
+            'performed_by_id'        => $user->id,
+            'performed_at'           => $now,
+            'due_date'               => $schedule->next_due_date?->toDateString() ?? $now->toDateString(),
+            'status'                 => 'completed',
+            'notes'                  => $request->input('notes'),
+            'document_path'          => $docPath,
+            'document_original_name' => $docName,
+            'is_overdue'             => $isOverdue,
+        ]);
+
+        $nextDue = $now->copy()->addDays($schedule->frequency_days ?: 30);
+        $schedule->update([
+            'last_performed_at' => $now->toDateString(),
+            'next_due_date'     => $nextDue->toDateString(),
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Maintenance marked complete. Next due: ' . $nextDue->format('d M Y'),
+        ]);
+    }
+
+    /**
+     * 13. List Engineer's Spare Part Requests
+     */
+    public function getPartRequests(Request $request)
+    {
+        $user = $request->user();
+
+        $requests = PartRequest::where('engineer_id', $user->id)
+            ->with(['ticket', 'items.part', 'machineModel'])
+            ->latest()
+            ->paginate(20);
+
+        return response()->json([
+            'success'  => true,
+            'requests' => $requests->map(function ($pr) {
                 return [
-                    'id'            => $s->id,
-                    'machine_name'  => $s->machine?->bank_name . ' - ' . $s->machine?->model_name,
-                    'serial_no'     => $s->machine?->serial_no,
-                    'frequency'     => $s->frequency,
-                    'next_due_date' => $s->next_due_date?->format('d M Y'),
-                    'is_overdue'    => $s->next_due_date?->isPast() ?? false,
+                    'id'                => $pr->id,
+                    'request_no'        => $pr->request_number,
+                    'ticket_id'         => $pr->ticket_id,
+                    'ticket_no'         => $pr->ticket?->ticket_no,
+                    'bank_name'         => $pr->ticket?->bank_name,
+                    'branch_name'       => $pr->ticket?->branch_name,
+                    'machine_model'     => $pr->machineModel?->name,
+                    'machine_serial_no' => $pr->machine_serial_no,
+                    'fault_description' => $pr->fault_description,
+                    'status'            => $pr->status,
+                    'status_label'      => $pr->status_label,
+                    'rejection_reason'  => $pr->rejection_reason,
+                    'courier'           => $pr->dispatch_courier,
+                    'tracking_no'       => $pr->dispatch_tracking_number,
+                    'dispatched_at'     => $pr->dispatched_at?->format('d M Y, h:i A'),
+                    'created_at'        => $pr->created_at?->format('d M Y, h:i A'),
+                    'items'             => $pr->items->map(fn($item) => [
+                        'part_name'      => $item->part?->name,
+                        'part_number'    => $item->part?->part_number,
+                        'qty_requested'  => (int) $item->qty_requested,
+                        'qty_approved'   => (int) $item->qty_approved,
+                        'qty_dispatched' => (int) $item->qty_dispatched,
+                    ])->values(),
                 ];
             }),
+            'pagination' => [
+                'current_page' => $requests->currentPage(),
+                'last_page'    => $requests->lastPage(),
+                'total'        => $requests->total(),
+            ],
+        ]);
+    }
+
+    /**
+     * 14. Parts Catalog Search (for building a part request)
+     */
+    public function getPartsCatalog(Request $request)
+    {
+        $search = trim((string) $request->input('search', ''));
+
+        $parts = Part::where('is_active', true)
+            ->when($search !== '', function ($q) use ($search) {
+                $q->where(function ($q2) use ($search) {
+                    $q2->where('name', 'like', "%{$search}%")
+                       ->orWhere('part_number', 'like', "%{$search}%");
+                });
+            })
+            ->orderBy('name')
+            ->limit(50)
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'parts'   => $parts->map(fn($p) => [
+                'id'          => $p->id,
+                'name'        => $p->name,
+                'part_number' => $p->part_number,
+                'unit'        => $p->unit ?? 'PCS',
+            ]),
+        ]);
+    }
+
+    /**
+     * 15. Submit Spare Part Request against a Ticket
+     */
+    public function submitPartRequest(Request $request)
+    {
+        $user = $request->user();
+
+        $validator = Validator::make($request->all(), [
+            'ticket_id'         => 'required|exists:tickets,id',
+            'fault_description' => 'required|string|max:2000',
+            'items'             => 'required|array|min:1',
+            'items.*.part_id'   => 'required|exists:parts,id',
+            'items.*.qty'       => 'required|integer|min:1',
+            'items.*.note'      => 'nullable|string|max:255',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Please select at least one part and describe the fault.',
+                'errors'  => $validator->errors(),
+            ], 422);
+        }
+
+        $ticket = Ticket::findOrFail($request->ticket_id);
+
+        if ($user->isEngineer() && $ticket->assigned_engineer_id !== $user->id && $ticket->original_field_engineer_id !== $user->id) {
+            return response()->json(['success' => false, 'message' => 'You are not assigned to this complaint.'], 403);
+        }
+
+        if ($ticket->status === 'awaiting_workshop') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Machine is in transit to central workshop. Part requests are locked.',
+            ], 422);
+        }
+
+        $pr = \Illuminate\Support\Facades\DB::transaction(function () use ($request, $user, $ticket) {
+            $pr = PartRequest::create([
+                'request_number'    => PartRequest::generateRequestNumber(),
+                'ticket_id'         => $ticket->id,
+                'engineer_id'       => $user->id,
+                'machine_serial_no' => $ticket->machine_serial_no,
+                'fault_description' => $request->fault_description,
+                'status'            => 'pending_stock_check',
+            ]);
+
+            foreach ($request->items as $item) {
+                PartRequestItem::create([
+                    'part_request_id'   => $pr->id,
+                    'part_id'           => (int) $item['part_id'],
+                    'qty_requested'     => (int) $item['qty'],
+                    'qty_from_envelope' => 0,
+                    'note'              => $item['note'] ?? null,
+                ]);
+            }
+
+            return $pr;
+        });
+
+        try {
+            \App\Services\NotificationService::notifyPartRequestCreated($pr);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Part request notification failed: ' . $e->getMessage());
+        }
+
+        TicketLog::create([
+            'ticket_id' => $ticket->id,
+            'user_id'   => $user->id,
+            'action'    => 'part_requested',
+            'notes'     => "Part request {$pr->request_number} raised via Android App by {$user->name}.",
+        ]);
+
+        return response()->json([
+            'success'    => true,
+            'message'    => "Part request {$pr->request_number} submitted for stock verification.",
+            'request_no' => $pr->request_number,
         ]);
     }
 }
