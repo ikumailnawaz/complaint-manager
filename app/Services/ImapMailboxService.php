@@ -64,9 +64,13 @@ class ImapMailboxService
             $cleanMsgId = $rawMsgId ? trim($rawMsgId, "<> \t\n\r\0\x0B") : null;
 
             $subject = isset($header->subject) ? mb_decode_mimeheader($header->subject) : '(No Subject)';
-            $fromEmail = isset($header->from[0]) ? strtolower($header->from[0]->mailbox . '@' . $header->from[0]->host) : 'unknown@bank.com';
+            $fromEmail = (isset($header->from[0]->mailbox, $header->from[0]->host))
+                ? strtolower($header->from[0]->mailbox . '@' . $header->from[0]->host)
+                : (isset($header->from[0]->mailbox) ? strtolower($header->from[0]->mailbox) : 'unknown@bank.com');
             $fromName = isset($header->from[0]->personal) ? mb_decode_mimeheader($header->from[0]->personal) : $fromEmail;
-            $toEmail = isset($header->to[0]) ? strtolower($header->to[0]->mailbox . '@' . $header->to[0]->host) : $username;
+            $toEmail = (isset($header->to[0]->mailbox, $header->to[0]->host))
+                ? strtolower($header->to[0]->mailbox . '@' . $header->to[0]->host)
+                : (isset($header->to[0]->mailbox) ? strtolower($header->to[0]->mailbox) : $username);
             $emailDate = isset($header->udate) ? Carbon::createFromTimestamp($header->udate) : Carbon::now();
             $isRead = ($header->Unseen !== 'U' && $header->Recent !== 'R');
 
