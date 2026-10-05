@@ -215,7 +215,7 @@ class MobileApiController extends Controller
 
         $ticket = Ticket::with(['feedbacks' => function ($q) {
             $q->latest('day_number');
-        }, 'partRequests.items.part'])->findOrFail($id);
+        }, 'partRequests.items.part', 'expenseClaims'])->findOrFail($id);
 
         if ($user->isEngineer() && $ticket->assigned_engineer_id !== $user->id && $ticket->original_field_engineer_id !== $user->id) {
             return response()->json(['success' => false, 'message' => 'Unauthorized access to this complaint.'], 403);
@@ -270,6 +270,23 @@ class MobileApiController extends Controller
                             'qty_requested'    => $item->qty_requested,
                             'from_envelope'    => $item->qty_from_envelope,
                         ]),
+                    ];
+                }),
+                'expense_claims'     => $ticket->expenseClaims->map(function ($c) {
+                    return [
+                        'id'               => $c->id,
+                        'claim_no'         => $c->claim_no ?? "EXP-{$c->id}",
+                        'claimed_amount'   => (float) $c->claimed_amount,
+                        'suggested_amount' => (float) $c->suggested_amount,
+                        'approved_amount'  => (float) $c->approved_amount,
+                        'status'           => $c->status,
+                        'category'         => $c->category,
+                        'from_city'        => $c->from_city,
+                        'to_city'          => $c->to_city,
+                        'trip_type'        => $c->trip_type,
+                        'voucher_url'      => $c->voucher_file ? asset('storage/' . $c->voucher_file) : null,
+                        'admin_notes'      => $c->admin_notes,
+                        'created_at'       => $c->created_at?->format('d M Y, h:i A'),
                     ];
                 }),
             ],
@@ -676,6 +693,38 @@ class MobileApiController extends Controller
         }
 
         $ticket = Ticket::findOrFail($request->ticket_id);
+
+        if ($user->isEngineer() && $ticket->assigned_engineer_id !== $user->id && $ticket->original_field_engineer_id !== $user->id) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized. You are not assigned to this complaint.',
+            ], 403);
+        }
+
+        if (!$ticket->canClaimExpense($user->id)) {
+            if ($ticket->isWorkshopFlow() && !$ticket->workshop_received_at) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'WORKSHOP EXPENSE POLICY: Machine is in transit to central workshop. Tour expense can only be filed once the unit is physically received at workshop.',
+                ], 422);
+            }
+            if ($ticket->isWorkshopFlow() && $ticket->original_field_engineer_id && (int)$user->id !== (int)$ticket->original_field_engineer_id) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'WORKSHOP EXPENSE POLICY: Only the original field engineer who visited the bank branch can claim travel expenses.',
+                ], 422);
+            }
+            if (!in_array($ticket->status, ['resolved', 'closed'])) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'STRICT AUDIT POLICY: Tour expense CANNOT be claimed before the complaint is marked Resolved.',
+                ], 422);
+            }
+            return response()->json([
+                'success' => false,
+                'message' => 'STRICT AUDIT POLICY: This ticket is currently not eligible for tour expense submission.',
+            ], 422);
+        }
 
         if ($ticket->hasActiveExpenseClaim()) {
             return response()->json([
