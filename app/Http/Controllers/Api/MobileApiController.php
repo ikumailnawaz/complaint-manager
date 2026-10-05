@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\AppNotification;
 use App\Models\EngineerInventory;
 use App\Models\ExpenseClaim;
+use App\Models\MachineModel;
 use App\Models\Part;
 use App\Models\PartRequest;
 use App\Models\PartRequestItem;
@@ -429,6 +430,182 @@ class MobileApiController extends Controller
     }
 
     /**
+     * 7b. Revert Resolved status back to assigned/in_progress (Mark Undone)
+     */
+    public function markUndone($id, Request $request)
+    {
+        $user = $request->user();
+        $ticket = Ticket::findOrFail($id);
+
+        if ($user->isEngineer() && $ticket->assigned_engineer_id !== $user->id) {
+            return response()->json(['success' => false, 'message' => 'You are not assigned to this complaint.'], 403);
+        }
+
+        if ($ticket->status !== 'resolved') {
+            return response()->json(['success' => false, 'message' => 'Only resolved complaints can be reopened.'], 422);
+        }
+
+        if ($ticket->hasActiveExpenseClaim()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'STRICT AUDIT POLICY: An expense claim has already been submitted against this resolved ticket. It cannot be reopened.',
+            ], 422);
+        }
+
+        $reason = $request->input('reason', 'Reopened by Field Engineer for further troubleshooting.');
+
+        $ticket->update([
+            'status'             => 'assigned',
+            'resolved_at'        => null,
+            'resolution_summary' => null,
+        ]);
+
+        TicketLog::create([
+            'ticket_id' => $ticket->id,
+            'user_id'   => $user->id,
+            'action'    => 'reopened',
+            'notes'     => "Ticket marked undone / reopened by {$user->name}. Reason: {$reason}",
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => "Ticket #{$ticket->ticket_no} reopened and marked active.",
+            'ticket'  => $ticket,
+        ]);
+    }
+
+    /**
+     * 7c. Pause SLA Clock & Put Ticket on Hold (Waiting for Approval)
+     */
+    public function requestApproval($id, Request $request)
+    {
+        $user = $request->user();
+        $ticket = Ticket::findOrFail($id);
+
+        if ($user->isEngineer() && $ticket->assigned_engineer_id !== $user->id) {
+            return response()->json(['success' => false, 'message' => 'You are not assigned to this complaint.'], 403);
+        }
+
+        if ($ticket->status === 'awaiting_approval') {
+            return response()->json(['success' => false, 'message' => 'Complaint is already waiting for approval.'], 422);
+        }
+
+        if (in_array($ticket->status, ['resolved', 'closed'])) {
+            return response()->json(['success' => false, 'message' => 'Cannot pause SLA on a resolved ticket.'], 422);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'approval_source' => 'nullable|string|max:150',
+            'reason'          => 'required|string|max:1000',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Please provide a reason for requesting approval.',
+                'errors'  => $validator->errors(),
+            ], 422);
+        }
+
+        $now = Carbon::now();
+        $source = $request->input('approval_source') ?: 'Customer / Branch Manager Authorization';
+        $reason = $request->input('reason');
+
+        $ticket->update([
+            'status'                   => 'awaiting_approval',
+            'approval_requested_at'    => $now,
+            'approval_requested_by_id' => $user->id,
+            'approval_source'          => $source,
+            'approval_request_reason'  => $reason,
+            'sla_paused_at'            => $now,
+        ]);
+
+        TicketLog::create([
+            'ticket_id' => $ticket->id,
+            'user_id'   => $user->id,
+            'action'    => 'approval_requested',
+            'notes'     => "SLA Clock Paused via Android App by {$user->name}. Waiting for Approval ({$source}). Reason: {$reason}",
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => "Ticket #{$ticket->ticket_no} paused. Status set to 'Waiting for Approval'.",
+            'ticket'  => $ticket,
+        ]);
+    }
+
+    /**
+     * 7d. Dispatch Machine to Central Workshop
+     */
+    public function sendToWorkshop($id, Request $request)
+    {
+        $user = $request->user();
+        $ticket = Ticket::findOrFail($id);
+
+        if ($user->isEngineer() && $ticket->assigned_engineer_id !== $user->id && $ticket->original_field_engineer_id !== $user->id) {
+            return response()->json(['success' => false, 'message' => 'You are not assigned to this complaint.'], 403);
+        }
+
+        if ($ticket->isWorkshopFlow() && !in_array($ticket->status, ['open', 'assigned', 'in_progress', 'awaiting_approval'])) {
+            return response()->json(['success' => false, 'message' => 'Machine has already been routed to central workshop.'], 422);
+        }
+
+        if ($ticket->status === 'resolved') {
+            return response()->json(['success' => false, 'message' => 'Cannot dispatch resolved machine to workshop.'], 422);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'workshop_location'          => 'required|string|max:100',
+            'workshop_dispatch_courier'  => 'nullable|string|max:100',
+            'workshop_dispatch_tracking' => 'nullable|string|max:100',
+            'notes'                      => 'required|string|max:2000',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Please provide workshop destination and cargo notes.',
+                'errors'  => $validator->errors(),
+            ], 422);
+        }
+
+        $courier = $request->workshop_dispatch_courier ?: 'TCS Cargo / Leopard Courier';
+        $tracking = $request->workshop_dispatch_tracking ?: ('TRK-' . date('Ymd') . '-' . rand(100, 999));
+        $originalFieldEngineerId = $ticket->original_field_engineer_id ?? $ticket->assigned_engineer_id ?? $user->id;
+
+        $ticket->update([
+            'status'                     => 'awaiting_workshop',
+            'workshop_location'          => $request->workshop_location,
+            'original_field_engineer_id' => $originalFieldEngineerId,
+            'assigned_engineer_id'       => $originalFieldEngineerId,
+            'workshop_dispatch_courier'  => $courier,
+            'workshop_dispatch_tracking' => $tracking,
+            'workshop_dispatched_at'     => Carbon::now(),
+            'workshop_dispatch_notes'    => $request->notes,
+        ]);
+
+        try {
+            $whatsapp = app(\App\Services\WhatsAppService::class);
+            $whatsapp->sendWorkshopAlert($ticket, $request->workshop_location, null);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('WhatsApp workshop alert skipped: ' . $e->getMessage());
+        }
+
+        TicketLog::create([
+            'ticket_id' => $ticket->id,
+            'user_id'   => $user->id,
+            'action'    => 'workshop_transfer',
+            'notes'     => "Machine sent to {$request->workshop_location} via {$courier} (Tracking #{$tracking}). Dispatched by {$user->name}. Notes: {$request->notes}",
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => "Machine dispatched to {$request->workshop_location} via {$courier} (Tracking #{$tracking}).",
+            'ticket'  => $ticket,
+        ]);
+    }
+
+    /**
      * 8. List Engineer's Tour Expense Claims
      */
     public function getExpenses(Request $request)
@@ -778,6 +955,66 @@ class MobileApiController extends Controller
     }
 
     /**
+     * 14b. List Active Machine Models
+     */
+    public function getMachineModels()
+    {
+        $models = MachineModel::where('is_active', true)
+            ->orderBy('name')
+            ->get(['id', 'name', 'machine_type', 'brand']);
+
+        return response()->json([
+            'success' => true,
+            'models'  => $models->map(fn($m) => [
+                'id'           => $m->id,
+                'name'         => $m->name,
+                'machine_type' => $m->machine_type,
+                'brand'        => $m->brand,
+            ]),
+        ]);
+    }
+
+    /**
+     * 14c. List Parts Mapped to a Specific Machine Model with Engineer Envelope Float
+     */
+    public function getModelParts($modelId, Request $request)
+    {
+        $user = $request->user();
+        $model = MachineModel::findOrFail($modelId);
+        $search = trim((string) $request->input('search', ''));
+
+        $query = $model->parts()
+            ->where('parts.is_active', true);
+
+        if ($search !== '') {
+            $query->where(function ($q) use ($search) {
+                $q->where('parts.name', 'like', "%{$search}%")
+                  ->orWhere('parts.part_number', 'like', "%{$search}%");
+            });
+        }
+
+        $parts = $query->orderBy('parts.name')->get(['parts.id', 'parts.part_number', 'parts.name', 'parts.unit']);
+
+        // Engineer's on-hand float envelope
+        $envelope = EngineerInventory::where('engineer_id', $user->id)
+            ->where('qty_on_hand', '>', 0)
+            ->pluck('qty_on_hand', 'part_id');
+
+        return response()->json([
+            'success' => true,
+            'parts'   => $parts->map(function ($p) use ($envelope) {
+                return [
+                    'id'          => $p->id,
+                    'part_number' => $p->part_number,
+                    'name'        => $p->name,
+                    'unit'        => $p->unit ?? 'PCS',
+                    'on_hand'     => (int) ($envelope[$p->id] ?? 0),
+                ];
+            }),
+        ]);
+    }
+
+    /**
      * 15. Submit Spare Part Request against a Ticket
      */
     public function submitPartRequest(Request $request)
@@ -786,6 +1023,8 @@ class MobileApiController extends Controller
 
         $validator = Validator::make($request->all(), [
             'ticket_id'         => 'required|exists:tickets,id',
+            'machine_model_id'  => 'nullable|exists:machine_models,id',
+            'machine_serial_no' => 'nullable|string|max:100',
             'fault_description' => 'required|string|max:2000',
             'items'             => 'required|array|min:1',
             'items.*.part_id'   => 'required|exists:parts,id',
@@ -819,17 +1058,20 @@ class MobileApiController extends Controller
                 'request_number'    => PartRequest::generateRequestNumber(),
                 'ticket_id'         => $ticket->id,
                 'engineer_id'       => $user->id,
-                'machine_serial_no' => $ticket->machine_serial_no,
+                'machine_model_id'  => $request->machine_model_id ?: null,
+                'machine_serial_no' => $request->machine_serial_no ?: $ticket->machine_serial_no,
                 'fault_description' => $request->fault_description,
                 'status'            => 'pending_stock_check',
             ]);
 
             foreach ($request->items as $item) {
+                $qtyReq = (int) $item['qty'];
+                $fromEnvelope = !empty($item['from_envelope']) ? min($qtyReq, (int) $item['from_envelope']) : 0;
                 PartRequestItem::create([
                     'part_request_id'   => $pr->id,
                     'part_id'           => (int) $item['part_id'],
-                    'qty_requested'     => (int) $item['qty'],
-                    'qty_from_envelope' => 0,
+                    'qty_requested'     => $qtyReq,
+                    'qty_from_envelope' => $fromEnvelope,
                     'note'              => $item['note'] ?? null,
                 ]);
             }
@@ -856,4 +1098,60 @@ class MobileApiController extends Controller
             'request_no' => $pr->request_number,
         ]);
     }
+
+    /**
+     * 16. Get Engineer Notifications
+     */
+    public function getNotifications(Request $request)
+    {
+        $user = $request->user();
+
+        $notifications = \App\Models\AppNotification::forUser($user)
+            ->latest()
+            ->take(30)
+            ->get();
+
+        $unreadCount = \App\Models\AppNotification::forUser($user)->unread()->count();
+
+        return response()->json([
+            'success'      => true,
+            'unread_count' => $unreadCount,
+            'notifications'=> $notifications->map(function ($n) {
+                return [
+                    'id'         => $n->id,
+                    'type'       => $n->type,
+                    'title'      => $n->title,
+                    'message'    => $n->message,
+                    'link'       => $n->link,
+                    'icon'       => $n->icon,
+                    'color'      => $n->color,
+                    'is_read'    => (bool) $n->is_read,
+                    'time_ago'   => $n->created_at?->diffForHumans(null, true, true),
+                    'created_at' => $n->created_at?->toIso8601String(),
+                    'data'       => $n->data,
+                ];
+            }),
+        ]);
+    }
+
+    /**
+     * 17. Mark Notification as Read
+     */
+    public function markNotificationRead($id, Request $request)
+    {
+        $user = $request->user();
+
+        $notif = \App\Models\AppNotification::where(function ($q) use ($user) {
+            $q->where('user_id', $user->id)
+              ->orWhereNull('user_id');
+        })->findOrFail($id);
+
+        $notif->markAsRead();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Notification marked as read.',
+        ]);
+    }
 }
+

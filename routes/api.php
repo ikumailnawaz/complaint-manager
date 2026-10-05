@@ -28,6 +28,9 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::get('/engineer/tickets/{id}', [MobileApiController::class, 'getTicketDetails'])->name('api.engineer.tickets.show');
     Route::post('/engineer/tickets/{id}/feedback', [MobileApiController::class, 'submitFeedback'])->name('api.engineer.tickets.feedback');
     Route::post('/engineer/tickets/{id}/resolve', [MobileApiController::class, 'resolveTicket'])->name('api.engineer.tickets.resolve');
+    Route::post('/engineer/tickets/{id}/mark-undone', [MobileApiController::class, 'markUndone'])->name('api.engineer.tickets.mark-undone');
+    Route::post('/engineer/tickets/{id}/request-approval', [MobileApiController::class, 'requestApproval'])->name('api.engineer.tickets.request-approval');
+    Route::post('/engineer/tickets/{id}/workshop', [MobileApiController::class, 'sendToWorkshop'])->name('api.engineer.tickets.workshop');
 
     // Tour Expenses
     Route::get('/engineer/expenses', [MobileApiController::class, 'getExpenses'])->name('api.engineer.expenses');
@@ -44,7 +47,14 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::get('/engineer/part-requests', [MobileApiController::class, 'getPartRequests'])->name('api.engineer.part-requests');
     Route::post('/engineer/part-requests', [MobileApiController::class, 'submitPartRequest'])->name('api.engineer.part-requests.store');
     Route::get('/engineer/parts-catalog', [MobileApiController::class, 'getPartsCatalog'])->name('api.engineer.parts-catalog');
+    Route::get('/engineer/machine-models', [MobileApiController::class, 'getMachineModels'])->name('api.engineer.machine-models');
+    Route::get('/engineer/machine-models/{id}/parts', [MobileApiController::class, 'getModelParts'])->name('api.engineer.machine-models.parts');
+
+    // Notifications
+    Route::get('/engineer/notifications', [MobileApiController::class, 'getNotifications'])->name('api.engineer.notifications');
+    Route::post('/engineer/notifications/{id}/read', [MobileApiController::class, 'markNotificationRead'])->name('api.engineer.notifications.read');
 });
+
 
 // n8n Webhook / Email Ingestion API
 Route::post('/v1/tickets/ingest', [TicketIngestController::class, 'ingest'])->name('api.tickets.ingest');
