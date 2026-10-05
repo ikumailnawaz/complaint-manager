@@ -199,7 +199,7 @@ VC-0001	Spindle Finger	Vc870	6
 VC-0021	SSR Relay	Vc870	0
 TSV;
 
-        DB::statement('PRAGMA foreign_keys = OFF;');
+        \Illuminate\Support\Facades\Schema::disableForeignKeyConstraints();
 
         // Clear existing demo parts and models
         DB::table('part_stock_ledgers')->truncate();
@@ -214,7 +214,7 @@ TSV;
         DB::table('parts')->truncate();
         DB::table('machine_models')->truncate();
 
-        DB::statement('PRAGMA foreign_keys = ON;');
+        \Illuminate\Support\Facades\Schema::enableForeignKeyConstraints();
 
         // Ensure 3 standard locations exist
         $locations = [
@@ -276,21 +276,17 @@ TSV;
             // Attach Part to Machine Model via pivot
             $model->parts()->syncWithoutDetaching([$part->id => ['is_common' => false]]);
 
-            // Parse initial usable stock from the 4th column (index 3)
-            $initialStock = isset($parts[3]) ? (int) trim($parts[3], " \t\n\r\0\x0B\"") : 0;
-
-            // Seed stock ledger: Lahore Head Office receives the initial usable stock, other locations initialize at 0
-            foreach ($locations as $index => $loc) {
-                $qty = ($index === 0) ? $initialStock : 0;
+            // Seed stock ledger: Initialize all locations at 0 stock
+            foreach ($locations as $loc) {
                 PartStockLedger::updateOrCreate(
                     ['part_id' => $part->id, 'location_id' => $loc->id],
-                    ['qty_on_hand' => $qty, 'qty_reserved' => 0]
+                    ['qty_on_hand' => 0, 'qty_reserved' => 0]
                 );
             }
 
             $partsCreated++;
         }
 
-        echo "Successfully imported " . count($modelCache) . " machine models and {$partsCreated} parts with initial usable stock into Lahore Head Office.\n";
+        echo "Successfully imported " . count($modelCache) . " machine models and {$partsCreated} parts with 0 initial stock.\n";
     }
 }
