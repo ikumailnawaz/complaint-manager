@@ -1010,7 +1010,7 @@ class MobileApiController extends Controller
     {
         $models = MachineModel::where('is_active', true)
             ->orderBy('name')
-            ->get(['id', 'name', 'machine_type', 'brand']);
+            ->get(['id', 'name', 'machine_type', 'manufacturer']);
 
         return response()->json([
             'success' => true,
@@ -1018,7 +1018,8 @@ class MobileApiController extends Controller
                 'id'           => $m->id,
                 'name'         => $m->name,
                 'machine_type' => $m->machine_type,
-                'brand'        => $m->brand,
+                'manufacturer' => $m->manufacturer,
+                'brand'        => $m->manufacturer,
             ]),
         ]);
     }
