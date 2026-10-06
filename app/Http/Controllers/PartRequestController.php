@@ -94,19 +94,27 @@ class PartRequestController extends Controller
 
     public function create(Request $request)
     {
-        $tickets = auth()->user()->isEngineer()
-            ? Ticket::where('assigned_engineer_id', auth()->id())
-                ->whereIn('status', ['in_progress', 'resolved', 'closed'])
-                ->orderByDesc('created_at')->get(['id', 'ticket_no', 'bank_name', 'branch_location', 'machine_model', 'machine_serial_no'])
-            : Ticket::whereIn('status', ['in_progress', 'resolved', 'closed'])
-                ->orderByDesc('created_at')->get(['id', 'ticket_no', 'bank_name', 'branch_location', 'machine_model', 'machine_serial_no']);
-        $models = MachineModel::where('is_active', true)->orderBy('name')->get();
         $selectedTicket = $request->ticket_id ? Ticket::find($request->ticket_id) : null;
 
         if ($selectedTicket && $selectedTicket->status === 'awaiting_workshop') {
             return redirect()->route('tickets.show', $selectedTicket)
                 ->with('error', "Machine is in transit to central workshop. Requesting spare parts is locked while cargo is in transit.");
         }
+
+        $ticketQuery = auth()->user()->isEngineer()
+            ? Ticket::where('assigned_engineer_id', auth()->id())
+            : Ticket::query();
+
+        $tickets = $ticketQuery->where('status', '!=', 'awaiting_workshop')
+            ->orderByDesc('created_at')
+            ->get(['id', 'ticket_no', 'bank_name', 'branch_location', 'machine_model', 'machine_serial_no', 'status']);
+
+        // Ensure the selected ticket from query param is always included even if assigned to someone else or in another status
+        if ($selectedTicket && !$tickets->contains('id', $selectedTicket->id)) {
+            $tickets->prepend($selectedTicket);
+        }
+
+        $models = MachineModel::where('is_active', true)->orderBy('name')->get();
 
         // Current engineer's advance float envelope stock
         $engineerEnvelopes = \App\Models\EngineerInventory::where('engineer_id', auth()->id())
@@ -223,12 +231,17 @@ class PartRequestController extends Controller
             abort(403, 'You are not authorized to edit this part request.');
         }
 
-        $tickets = auth()->user()->isEngineer()
+        $ticketQuery = auth()->user()->isEngineer()
             ? Ticket::where('assigned_engineer_id', auth()->id())
-                ->whereIn('status', ['in_progress', 'resolved', 'closed'])
-                ->orderByDesc('created_at')->get(['id', 'ticket_no', 'bank_name', 'branch_location', 'machine_model', 'machine_serial_no'])
-            : Ticket::whereIn('status', ['in_progress', 'resolved', 'closed'])
-                ->orderByDesc('created_at')->get(['id', 'ticket_no', 'bank_name', 'branch_location', 'machine_model', 'machine_serial_no']);
+            : Ticket::query();
+
+        $tickets = $ticketQuery->where('status', '!=', 'awaiting_workshop')
+            ->orderByDesc('created_at')
+            ->get(['id', 'ticket_no', 'bank_name', 'branch_location', 'machine_model', 'machine_serial_no', 'status']);
+
+        if ($partRequest->ticket && !$tickets->contains('id', $partRequest->ticket_id)) {
+            $tickets->prepend($partRequest->ticket);
+        }
 
         $models = MachineModel::where('is_active', true)->orderBy('name')->get();
         $partRequest->load(['items.part', 'machineModel', 'ticket']);

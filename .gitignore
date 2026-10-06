@@ -21,6 +21,7 @@ yarn-error.log
 # Scratch scripts & temporary dev dumps
 /scratch/
 *.sql
+composer.phar
 
 # WhatsApp Web service dependencies & private session auth
 wwebjs-service/node_modules/

@@ -65,7 +65,7 @@
                                 data-model="{{ $t->machine_model ?? '' }}"
                                 data-serial="{{ $t->machine_serial_no ?? '' }}"
                                 {{ $isSel ? 'selected' : '' }}>
-                                #{{ $t->ticket_no }} — {{ $t->bank_name ?? 'N/A' }} ({{ $t->branch_location ?? 'No branch' }})
+                                #{{ $t->ticket_no }} — {{ $t->bank_name ?? 'N/A' }} ({{ $t->branch_location ?? 'No branch' }}) [{{ ucfirst(str_replace('_', ' ', $t->status)) }}]
                             </option>
                         @endforeach
                     </select>

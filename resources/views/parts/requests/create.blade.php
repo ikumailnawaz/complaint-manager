@@ -71,13 +71,13 @@
                         <option value="">-- Select Active Ticket --</option>
                         @foreach($tickets as $t)
                             @php
-                                $isSel = (old('ticket_id', $selectedTicket?->id) == $t->id);
+                                $isSel = (old('ticket_id', $selectedTicket?->id ?? request('ticket_id')) == $t->id);
                             @endphp
                             <option value="{{ $t->id }}"
                                 data-model="{{ $t->machine_model ?? '' }}"
                                 data-serial="{{ $t->machine_serial_no ?? '' }}"
                                 {{ $isSel ? 'selected' : '' }}>
-                                #{{ $t->ticket_no }} — {{ $t->bank_name ?? 'N/A' }} ({{ $t->branch_location ?? 'No branch' }})
+                                #{{ $t->ticket_no }} — {{ $t->bank_name ?? 'N/A' }} ({{ $t->branch_location ?? 'No branch' }}) [{{ ucfirst(str_replace('_', ' ', $t->status)) }}]
                             </option>
                         @endforeach
                     </select>
@@ -285,9 +285,13 @@ document.getElementById('ticketSelect').addEventListener('change', function () {
             const opt = modelSelect.options[i];
             const optText = (opt.textContent || '').toLowerCase().trim();
             const optName = (opt.getAttribute('data-name') || '').toLowerCase().trim();
-            if (optName && (ticketModel === optName || ticketModel.includes(optName) || optName.includes(ticketModel))) {
-                modelSelect.selectedIndex = i;
-                modelSelect.dispatchEvent(new Event('change'));
+            const matches = (optName && (ticketModel === optName || ticketModel.includes(optName) || optName.includes(ticketModel))) ||
+                            (optText && (ticketModel === optText || ticketModel.includes(optText) || optText.includes(ticketModel)));
+            if (matches) {
+                if (modelSelect.selectedIndex !== i) {
+                    modelSelect.selectedIndex = i;
+                    modelSelect.dispatchEvent(new Event('change'));
+                }
                 break;
             }
         }
@@ -452,16 +456,16 @@ document.getElementById('partRequestForm').addEventListener('submit', function (
     }
 });
 
-// Auto-trigger model load if already pre-selected
+// Auto-trigger model load and ticket initialization if already pre-selected
 document.addEventListener('DOMContentLoaded', function () {
+    const ticketSelect = document.getElementById('ticketSelect');
+    if (ticketSelect && ticketSelect.value) {
+        ticketSelect.dispatchEvent(new Event('change'));
+    }
+
     const modelSelect = document.getElementById('modelSelect');
     if (modelSelect && modelSelect.value) {
         modelSelect.dispatchEvent(new Event('change'));
-    } else {
-        const ticketSelect = document.getElementById('ticketSelect');
-        if (ticketSelect && ticketSelect.value) {
-            ticketSelect.dispatchEvent(new Event('change'));
-        }
     }
 });
 </script>
