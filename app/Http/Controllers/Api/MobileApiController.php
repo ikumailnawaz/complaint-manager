@@ -1203,5 +1203,24 @@ class MobileApiController extends Controller
             'message' => 'Notification marked as read.',
         ]);
     }
+
+    /**
+     * 18. Register or update engineer's device FCM Token for mobile push notifications
+     */
+    public function updateFcmToken(Request $request)
+    {
+        $request->validate([
+            'fcm_token' => 'required|string',
+        ]);
+
+        $user = $request->user();
+        $user->fcm_token = $request->fcm_token;
+        $user->save();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'FCM device token registered successfully.',
+        ]);
+    }
 }
 

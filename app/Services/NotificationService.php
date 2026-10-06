@@ -45,6 +45,22 @@ class NotificationService
                 'engineer_id' => $engineer->id,
             ],
         ]);
+
+        // 3. Send Native Android Notification Center Push Alert
+        try {
+            FirebasePushService::sendToUser(
+                $engineer,
+                "Ticket Assigned: #{$ticket->ticket_no}",
+                "Assigned to {$ticket->bank_name} ({$ticket->branch_location}) • {$ticket->machine_model}",
+                [
+                    'ticket_id' => (string) $ticket->id,
+                    'ticket_no' => (string) $ticket->ticket_no,
+                    'type'      => 'ticket_assigned',
+                ]
+            );
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('FCM Push failed for ticket assignment: ' . $e->getMessage());
+        }
     }
 
     /**
@@ -141,6 +157,17 @@ class NotificationService
                 'part_request_id' => $partRequest->id,
             ],
         ]);
+
+        if ($partRequest->engineer) {
+            try {
+                FirebasePushService::sendToUser(
+                    $partRequest->engineer,
+                    "Parts Approved: #{$partRequest->request_number}",
+                    "Super Admin approved parts for ticket #{$partRequest->ticket?->ticket_no}. Awaiting dispatch.",
+                    ['part_request_id' => (string) $partRequest->id, 'type' => 'part_request_approved']
+                );
+            } catch (\Throwable $e) {}
+        }
     }
 
     /**
@@ -163,6 +190,17 @@ class NotificationService
                     'tracking' => $partRequest->dispatch_tracking_number,
                 ],
             ]);
+
+            if ($partRequest->engineer) {
+                try {
+                    FirebasePushService::sendToUser(
+                        $partRequest->engineer,
+                        "Parts Dispatched: #{$partRequest->request_number}",
+                        "Shipped via {$partRequest->dispatch_courier} (Tracking: {$partRequest->dispatch_tracking_number}).",
+                        ['part_request_id' => (string) $partRequest->id, 'type' => 'part_request_dispatched']
+                    );
+                } catch (\Throwable $e) {}
+            }
         }
     }
 

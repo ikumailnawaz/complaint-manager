@@ -25,6 +25,7 @@ class User extends Authenticatable
         'specialization',
         'is_available',
         'is_on_leave',
+        'fcm_token',
     ];
 
     protected $hidden = [

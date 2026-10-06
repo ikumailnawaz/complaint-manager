@@ -50,9 +50,10 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::get('/engineer/machine-models', [MobileApiController::class, 'getMachineModels'])->name('api.engineer.machine-models');
     Route::get('/engineer/machine-models/{id}/parts', [MobileApiController::class, 'getModelParts'])->name('api.engineer.machine-models.parts');
 
-    // Notifications
+    // Notifications & FCM Push Alerts
     Route::get('/engineer/notifications', [MobileApiController::class, 'getNotifications'])->name('api.engineer.notifications');
     Route::post('/engineer/notifications/{id}/read', [MobileApiController::class, 'markNotificationRead'])->name('api.engineer.notifications.read');
+    Route::post('/engineer/fcm-token', [MobileApiController::class, 'updateFcmToken'])->name('api.engineer.fcm-token');
 });
 
 
