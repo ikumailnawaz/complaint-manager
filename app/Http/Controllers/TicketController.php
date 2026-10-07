@@ -295,6 +295,10 @@ class TicketController extends Controller
             'notes' => 'Ticket created manually by ' . Auth::user()->name . ($ticket->assigned_engineer_id ? " and assigned to engineer." : " (unassigned)."),
         ]);
 
+        if ($ticket->assigned_engineer_id && $ticket->engineer) {
+            \App\Services\NotificationService::notifyTicketAssigned($ticket, $ticket->engineer);
+        }
+
         return redirect()->route('tickets.show', $ticket)->with('success', "Ticket {$ticket->ticket_no} created successfully.");
     }
 
