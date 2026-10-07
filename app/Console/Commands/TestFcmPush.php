@@ -30,7 +30,7 @@ class TestFcmPush extends Command
         \Illuminate\Support\Facades\Cache::forget('firebase_fcm_oauth_token');
         $token = \App\Services\FirebasePushService::getAccessToken();
         if (!$token) {
-            $err = session('fcm_oauth_error', 'Check storage/logs/laravel.log');
+            $err = \App\Services\FirebasePushService::$lastError ?? 'Check storage/logs/laravel.log';
             $this->error("❌ Failed to obtain OAuth2 token from Google: " . $err);
             return 1;
         }

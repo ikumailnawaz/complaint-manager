@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Log;
 class FirebasePushService
 {
     protected static ?string $credentialsPath = null;
+    public static ?string $lastError = null;
 
     /**
      * Get path to the Firebase Service Account JSON file.
@@ -70,15 +71,15 @@ class FirebasePushService
             $key = openssl_pkey_get_private($json['private_key']);
             if (!$key) {
                 $err = openssl_error_string() ?: 'Invalid private key format';
-                Log::error("FirebasePushService: OpenSSL cannot parse private key: " . $err);
-                session()->flash('fcm_oauth_error', "OpenSSL private key error: " . $err);
+                self::$lastError = "OpenSSL private key error: " . $err;
+                Log::error("FirebasePushService: " . self::$lastError);
                 return null;
             }
 
             if (!openssl_sign($data, $signature, $key, OPENSSL_ALGO_SHA256)) {
                 $err = openssl_error_string() ?: 'Unknown sign error';
-                Log::error("FirebasePushService: OpenSSL failed to sign JWT assertion: " . $err);
-                session()->flash('fcm_oauth_error', "OpenSSL sign error: " . $err);
+                self::$lastError = "OpenSSL sign error: " . $err;
+                Log::error("FirebasePushService: " . self::$lastError);
                 return null;
             }
 
@@ -96,8 +97,8 @@ class FirebasePushService
             }
 
             $errBody = $response->body();
-            Log::error("FirebasePushService: OAuth2 token exchange failed: " . $errBody);
-            session()->flash('fcm_oauth_error', "Google OAuth2 endpoint rejected JWT: " . $errBody);
+            self::$lastError = "Google OAuth2 endpoint rejected JWT (" . $response->status() . "): " . $errBody;
+            Log::error("FirebasePushService: " . self::$lastError);
             return null;
         });
     }
