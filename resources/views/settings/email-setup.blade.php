@@ -36,13 +36,21 @@
                 <span>New Message</span>
             </button>
 
-            <!-- Sync Mailbox Now -->
-            <form action="{{ route('settings.email.sync') }}" method="POST" class="inline">
+            <!-- Sync Mailbox Form with Limit Selection -->
+            <form action="{{ route('settings.email.sync') }}" method="POST" class="inline-flex items-center">
                 @csrf
-                <button type="submit" class="inline-flex items-center space-x-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 hover:border-slate-600 px-3.5 py-2 rounded-lg font-medium text-xs transition active:scale-95" title="Fetch newest emails from IMAP server">
-                    <i class="fa-solid fa-rotate text-emerald-400"></i>
-                    <span>Sync Mailbox</span>
-                </button>
+                <div class="inline-flex items-center rounded-lg border border-slate-700 bg-slate-800 p-0.5 shadow-sm">
+                    <button type="submit" class="inline-flex items-center space-x-1.5 text-slate-200 hover:text-white px-2.5 py-1.5 font-medium text-xs transition active:scale-95" title="Fetch recent emails from IMAP server">
+                        <i class="fa-solid fa-rotate text-emerald-400"></i>
+                        <span>Sync</span>
+                    </button>
+                    <select name="limit" onchange="this.form.submit()" class="bg-slate-900 text-slate-300 text-[11px] rounded border-0 py-1 px-1.5 focus:ring-1 focus:ring-sky-500 cursor-pointer" title="Number of recent emails to scan">
+                        <option value="50">50 msgs</option>
+                        <option value="150" selected>150 msgs</option>
+                        <option value="300">300 msgs</option>
+                        <option value="500">500 msgs</option>
+                    </select>
+                </div>
             </form>
 
             <!-- Empty Mailbox -->
@@ -218,7 +226,7 @@
                 <form action="{{ route('settings.email') }}" method="GET" class="relative">
                     <input type="hidden" name="folder" value="{{ $folder }}">
                     <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-xs text-slate-400"></i>
-                    <input type="text" name="search" value="{{ $search }}" placeholder="Search sender, recipient, subject..." class="w-full bg-white border border-slate-300 rounded-lg pl-8 pr-8 py-1.5 text-xs focus:ring-2 focus:ring-sky-500 focus:border-sky-500 outline-none transition">
+                    <input type="text" name="search" value="{{ $search }}" placeholder="Search sender, recipient, subject, ticket#..." class="w-full bg-white border border-slate-300 rounded-lg pl-8 pr-8 py-1.5 text-xs focus:ring-2 focus:ring-sky-500 focus:border-sky-500 outline-none transition">
                     @if($search)
                     <a href="{{ route('settings.email', ['folder' => $folder]) }}" class="absolute right-2.5 top-2 text-xs text-slate-400 hover:text-slate-600" title="Clear search">
                         <i class="fa-solid fa-xmark"></i>
@@ -227,9 +235,23 @@
                 </form>
 
                 <div class="flex items-center justify-between text-[11px] text-slate-500 px-1">
-                    <span>Showing {{ $emails->count() }} messages</span>
+                    <span>Showing {{ $emails->count() }} of {{ $counts[$folder] ?? $counts['all'] }} stored</span>
                     <span class="font-medium capitalize text-slate-700">{{ str_replace('_', ' ', $folder) }} Folder</span>
                 </div>
+
+                @if($search && $emails->isEmpty())
+                <div class="p-2 bg-amber-50 border border-amber-200 rounded-lg text-[11px] text-amber-800 space-y-1">
+                    <p class="font-semibold"><i class="fa-solid fa-cloud-arrow-down mr-1"></i> Not found in local database?</p>
+                    <form action="{{ route('settings.email.sync') }}" method="POST" class="flex items-center gap-1.5 pt-0.5">
+                        @csrf
+                        <input type="hidden" name="server_search" value="{{ $search }}">
+                        <input type="hidden" name="limit" value="100">
+                        <button type="submit" class="bg-amber-600 hover:bg-amber-700 text-white font-bold px-2 py-1 rounded text-[10px] shadow-sm transition">
+                            Search Remote Mail Server for "{{ Str::limit($search, 15) }}"
+                        </button>
+                    </form>
+                </div>
+                @endif
 
                 @if($counts['unassigned'] > 0)
                 <div class="pt-1">

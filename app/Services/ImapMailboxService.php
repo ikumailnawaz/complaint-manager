@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Log;
 
 class ImapMailboxService
 {
-    public function syncMailbox(int $limit = 40): array
+    public function syncMailbox(int $limit = 100, ?string $serverSearch = null): array
     {
         $host = config('mail.imap.host') ?: env('IMAP_HOST', config('mail.mailers.smtp.host', 'mail.cmscompany.biz'));
         $port = (int) (config('mail.imap.port') ?: env('IMAP_PORT', 993));
@@ -25,6 +25,7 @@ class ImapMailboxService
             ];
         }
 
+        @ini_set('max_execution_time', '300');
         $mailbox = "{" . "{$host}:{$port}/imap/{$encryption}/novalidate-cert}INBOX";
 
         // Open IMAP stream
@@ -35,7 +36,7 @@ class ImapMailboxService
             Log::error("ImapMailboxService: Connection failure: {$err}");
             return [
                 'success' => false,
-                'error' => "Failed to connect to GoDaddy IMAP server: {$err}",
+                'error' => "Failed to connect to IMAP server: {$err}",
                 'new_count' => 0,
             ];
         }
@@ -51,17 +52,48 @@ class ImapMailboxService
             ];
         }
 
-        $startMsg = max(1, $totalMsgs - $limit + 1);
+        // Determine message IDs to inspect
+        $mailIds = [];
+        if (!empty($serverSearch)) {
+            // Search remote IMAP directly (e.g. SUBJECT or FROM)
+            $searchClean = addslashes(trim($serverSearch));
+            $found = @imap_search($inbox, "OR FROM \"{$searchClean}\" SUBJECT \"{$searchClean}\"");
+            if (is_array($found)) {
+                rsort($found);
+                $mailIds = array_slice($found, 0, $limit);
+            }
+        }
+
+        if (empty($mailIds)) {
+            $startMsg = max(1, $totalMsgs - $limit + 1);
+            for ($m = $totalMsgs; $m >= $startMsg; $m--) {
+                $mailIds[] = $m;
+            }
+        }
+
+        // Preload existing UIDs in one quick query to avoid redundant IMAP body fetches
+        $existingUids = InboxEmail::pluck('uid')->filter()->flip()->all();
+        $existingMsgIds = InboxEmail::pluck('message_id')->filter()->flip()->all();
+
         $newCount = 0;
 
-        // Loop from newest to oldest
-        for ($mailId = $totalMsgs; $mailId >= $startMsg; $mailId--) {
+        foreach ($mailIds as $mailId) {
+            $msgUid = (string) @imap_uid($inbox, $mailId);
+
+            // Fast skip if UID already recorded in database
+            if ($msgUid && isset($existingUids[$msgUid])) {
+                continue;
+            }
+
             $header = @imap_headerinfo($inbox, $mailId);
             if (!$header) continue;
 
-            $msgUid = (string) imap_uid($inbox, $mailId);
             $rawMsgId = $header->message_id ?? null;
             $cleanMsgId = $rawMsgId ? trim($rawMsgId, "<> \t\n\r\0\x0B") : null;
+
+            if ($cleanMsgId && isset($existingMsgIds[$cleanMsgId])) {
+                continue;
+            }
 
             $subject = isset($header->subject) ? mb_decode_mimeheader($header->subject) : '(No Subject)';
             $fromEmail = (isset($header->from[0]->mailbox, $header->from[0]->host))
@@ -88,31 +120,7 @@ class ImapMailboxService
             }
             $ccString = !empty($ccAddresses) ? implode(', ', array_unique($ccAddresses)) : null;
 
-            // Check if already stored in database
-            $existing = null;
-            if ($cleanMsgId) {
-                $existing = InboxEmail::where('message_id', $cleanMsgId)->first();
-            }
-            if (!$existing && $msgUid) {
-                $existing = InboxEmail::where('uid', $msgUid)->first();
-            }
-
-            if ($existing) {
-                // Backfill cc_emails if empty
-                if (empty($existing->cc_emails) && !empty($ccString)) {
-                    $existing->update(['cc_emails' => $ccString]);
-                }
-                // Update read status or ticket link if not set
-                if (empty($existing->ticket_id)) {
-                    $matchedTicket = Ticket::where('incoming_message_id', 'like', "%{$cleanMsgId}%")->first();
-                    if ($matchedTicket) {
-                        $existing->update(['ticket_id' => $matchedTicket->id]);
-                    }
-                }
-                continue;
-            }
-
-            // Extract body parts (both text and html)
+            // Extract body parts (text & HTML)
             $bodyText = $this->getMailBodyText($inbox, $mailId);
             $bodyHtml = $this->getMailBodyHtml($inbox, $mailId);
 
@@ -126,7 +134,7 @@ class ImapMailboxService
                 $matchedTicket = Ticket::where('incoming_message_id', 'like', "%{$cleanMsgId}%")->first();
             }
             if (!$matchedTicket && !empty($subject)) {
-                // Thread reply match: exact subject match with same sender
+                // Thread reply match: subject match with same sender
                 $cleanSubject = preg_replace('/^(?:re|fwd|fw):\s*/i', '', trim($subject));
                 if (!empty($cleanSubject)) {
                     $matchedTicket = Ticket::where('customer_email', $fromEmail)
@@ -154,6 +162,8 @@ class ImapMailboxService
                 'ticket_id' => $matchedTicket?->id,
             ]);
 
+            $existingUids[$msgUid] = true;
+            if ($cleanMsgId) $existingMsgIds[$cleanMsgId] = true;
             $newCount++;
         }
 

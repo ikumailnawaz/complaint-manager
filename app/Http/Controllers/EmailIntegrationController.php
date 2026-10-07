@@ -100,13 +100,20 @@ class EmailIntegrationController extends Controller
             abort(403, 'Email mailbox and triage command center is reserved for Operations Administrators.');
         }
 
-        $result = $imapService->syncMailbox(40);
+        $limit = min(500, max(20, (int) $request->input('limit', 200)));
+        $serverSearch = $request->filled('server_search') ? trim($request->input('server_search')) : null;
+
+        $result = $imapService->syncMailbox($limit, $serverSearch);
 
         if ($result['success'] ?? false) {
-            return back()->with('success', "Mailbox synced successfully! Fetched {$result['new_count']} new emails from GoDaddy (Total in mailbox: {$result['total']}).");
+            $msg = "Mailbox synced successfully! Fetched {$result['new_count']} new emails into database (Total on server: {$result['total']}).";
+            if ($serverSearch) {
+                $msg .= " Filtered by search term '{$serverSearch}'.";
+            }
+            return back()->with('success', $msg);
         }
 
-        return back()->with('error', "Mailbox sync failed: " . ($result['error'] ?? 'Unknown error connecting to GoDaddy IMAP.'));
+        return back()->with('error', "Mailbox sync failed: " . ($result['error'] ?? 'Unknown error connecting to IMAP.'));
     }
 
     /**

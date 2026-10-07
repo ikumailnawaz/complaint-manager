@@ -16,34 +16,28 @@ class FetchBankEmailsCommand extends Command
      *
      * @var string
      */
-    protected $signature = 'tickets:fetch-emails {--limit=10 : Max number of unread emails to process}';
+    protected $signature = 'tickets:fetch-emails {--limit=50 : Max number of emails to process} {--all : Fetch without unseen filter}';
 
     /**
      * The console command description.
      *
      * @var string
      */
-    protected $description = 'Connects to GoDaddy IMAP inbox, extracts complaints with Gemini AI, and auto-creates unassigned tickets';
+    protected $description = 'Connects to IMAP inbox, extracts complaints with Gemini AI, and auto-creates unassigned tickets';
 
     /**
      * Execute the console command.
      */
     public function handle(GeminiService $gemini): int
     {
-        $host = env('IMAP_HOST', 'imap.secureserver.net');
-        $port = env('IMAP_PORT', 993);
-        $encryption = env('IMAP_ENCRYPTION', 'ssl');
-        $username = env('IMAP_USERNAME', '');
-        $password = env('IMAP_PASSWORD', '');
+        $host = config('mail.imap.host') ?: env('IMAP_HOST', 'mail.cmscompany.biz');
+        $port = (int) (config('mail.imap.port') ?: env('IMAP_PORT', 993));
+        $encryption = strtolower(config('mail.imap.encryption') ?: env('IMAP_ENCRYPTION', 'ssl'));
+        $username = config('mail.imap.username') ?: env('IMAP_USERNAME', 'support@cmscompany.biz');
+        $password = config('mail.imap.password') ?: env('IMAP_PASSWORD', '');
 
         if (empty($username) || empty($password)) {
-            $this->error('IMAP credentials not configured in .env. Please set IMAP_USERNAME and IMAP_PASSWORD.');
-            $this->info('Example:');
-            $this->line('IMAP_HOST=imap.secureserver.net');
-            $this->line('IMAP_PORT=993');
-            $this->line('IMAP_ENCRYPTION=ssl');
-            $this->line('IMAP_USERNAME=complaints@yourdomain.com');
-            $this->line('IMAP_PASSWORD=YourPassword123');
+            $this->error('IMAP credentials not configured. Please set in config/mail.php or .env.');
             return Command::FAILURE;
         }
 
@@ -63,18 +57,20 @@ class FetchBankEmailsCommand extends Command
 
         $this->info("Successfully connected to mailbox!");
 
-        // Search for unread emails
-        $emails = imap_search($inbox, 'UNSEEN');
+        // Search for emails
+        $searchCriteria = $this->option('all') ? 'ALL' : 'UNSEEN';
+        $emails = imap_search($inbox, $searchCriteria);
 
         if (!$emails) {
-            $this->info("No unread emails found in INBOX. All caught up!");
+            $this->info("No {$searchCriteria} emails found in INBOX. All caught up!");
             imap_close($inbox);
             return Command::SUCCESS;
         }
 
+        rsort($emails);
         $limit = (int) $this->option('limit');
         $count = count($emails);
-        $this->info("Found {$count} unread email(s). Processing up to {$limit}...");
+        $this->info("Found {$count} {$searchCriteria} email(s). Processing top {$limit}...");
 
         $processed = 0;
         foreach (array_slice($emails, 0, $limit) as $mailId) {
