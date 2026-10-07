@@ -42,7 +42,8 @@ class FirebasePushService
         return Cache::remember('firebase_fcm_oauth_token', 3300, function () {
             $path = self::getCredentialsPath();
             if (!file_exists($path)) {
-                Log::warning("FirebasePushService: Service account file not found at [{$path}].");
+                self::$lastError = "Service account file not found at [{$path}].";
+                Log::warning("FirebasePushService: " . self::$lastError);
                 return null;
             }
 
@@ -50,7 +51,9 @@ class FirebasePushService
             $raw = preg_replace('/^\xEF\xBB\xBF/', '', $raw);
             $json = json_decode($raw, true);
             if (!$json || empty($json['client_email']) || empty($json['private_key'])) {
-                Log::warning("FirebasePushService: Invalid service account file format: " . json_last_error_msg());
+                $err = json_last_error_msg();
+                self::$lastError = "Invalid service account file format: {$err}. " . (!$json ? 'JSON decode returned null' : (empty($json['client_email']) ? 'missing client_email' : 'missing private_key'));
+                Log::warning("FirebasePushService: " . self::$lastError);
                 return null;
             }
 

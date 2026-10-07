@@ -28,13 +28,63 @@ class TestFcmPush extends Command
 
         $this->line("2. Testing Google OAuth2 token generation...");
         \Illuminate\Support\Facades\Cache::forget('firebase_fcm_oauth_token');
-        $token = \App\Services\FirebasePushService::getAccessToken();
-        if (!$token) {
-            $err = \App\Services\FirebasePushService::$lastError ?? 'Check storage/logs/laravel.log';
-            $this->error("❌ Failed to obtain OAuth2 token from Google: " . $err);
+        
+        $raw = file_get_contents($credPath);
+        $raw = preg_replace('/^\xEF\xBB\xBF/', '', $raw);
+        $json = json_decode($raw, true);
+
+        if (!$json || !is_array($json)) {
+            $this->error("❌ JSON parse error: " . json_last_error_msg());
             return 1;
         }
-        $this->info("✅ OAuth2 token obtained successfully: " . substr($token, 0, 20) . "...");
+
+        if (empty($json['client_email']) || empty($json['private_key'])) {
+            $this->error("❌ JSON missing client_email or private_key. Keys found: " . implode(', ', array_keys($json)));
+            return 1;
+        }
+        $this->info("✅ JSON valid. Service Account: " . $json['client_email']);
+
+        $key = openssl_pkey_get_private($json['private_key']);
+        if (!$key) {
+            $this->error("❌ OpenSSL failed to read private_key: " . (openssl_error_string() ?: 'Invalid private key format'));
+            return 1;
+        }
+        $this->info("✅ OpenSSL successfully loaded RSA private key.");
+
+        $now = time();
+        $base64Url = fn($data) => str_replace(['+', '/', '='], ['-', '_', ''], base64_encode($data));
+        $header = $base64Url(json_encode(['alg' => 'RS256', 'typ' => 'JWT']));
+        $claim = $base64Url(json_encode([
+            'iss'   => $json['client_email'],
+            'scope' => 'https://www.googleapis.com/auth/firebase.messaging',
+            'aud'   => 'https://oauth2.googleapis.com/token',
+            'exp'   => $now + 3600,
+            'iat'   => $now,
+        ]));
+        $data = $header . '.' . $claim;
+        $signature = '';
+
+        if (!openssl_sign($data, $signature, $key, OPENSSL_ALGO_SHA256)) {
+            $this->error("❌ OpenSSL signing failed: " . (openssl_error_string() ?: 'unknown error'));
+            return 1;
+        }
+        $this->info("✅ OpenSSL successfully signed JWT assertion.");
+
+        $jwt = $data . '.' . $base64Url($signature);
+        $response = \Illuminate\Support\Facades\Http::withoutVerifying()
+            ->asForm()
+            ->post('https://oauth2.googleapis.com/token', [
+                'grant_type' => 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+                'assertion'  => $jwt,
+            ]);
+
+        if (!$response->successful()) {
+            $this->error("❌ Google OAuth2 HTTP Error (" . $response->status() . "): " . $response->body());
+            return 1;
+        }
+
+        $token = $response->json('access_token');
+        $this->info("✅ Google OAuth2 token obtained successfully: " . substr($token, 0, 20) . "...");
 
         $this->line("3. Checking registered engineers with FCM tokens in database...");
         $users = \App\Models\User::whereNotNull('fcm_token')->get();
