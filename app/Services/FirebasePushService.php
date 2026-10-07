@@ -45,9 +45,11 @@ class FirebasePushService
                 return null;
             }
 
-            $json = json_decode(file_get_contents($path), true);
-            if (empty($json['client_email']) || empty($json['private_key'])) {
-                Log::warning("FirebasePushService: Invalid service account file format.");
+            $raw = file_get_contents($path);
+            $raw = preg_replace('/^\xEF\xBB\xBF/', '', $raw);
+            $json = json_decode($raw, true);
+            if (!$json || empty($json['client_email']) || empty($json['private_key'])) {
+                Log::warning("FirebasePushService: Invalid service account file format: " . json_last_error_msg());
                 return null;
             }
 
@@ -115,9 +117,21 @@ class FirebasePushService
             return ['success' => false, 'error' => $msg];
         }
 
-        $json = json_decode(file_get_contents($path), true);
-        if (!$json || empty($json['client_email']) || empty($json['private_key'])) {
-            $msg = "Invalid JSON in service account file at [{$path}].";
+        $raw = file_get_contents($path);
+        // Strip UTF-8 BOM if present
+        $raw = preg_replace('/^\xEF\xBB\xBF/', '', $raw);
+        $json = json_decode($raw, true);
+
+        if (!$json || !is_array($json)) {
+            $err = json_last_error_msg();
+            $msg = "Invalid JSON in service account file at [{$path}]: {$err}. (File size: " . strlen($raw) . " bytes)";
+            Log::warning("FirebasePushService: " . $msg);
+            return ['success' => false, 'error' => $msg];
+        }
+
+        if (empty($json['client_email']) || empty($json['private_key'])) {
+            $keysFound = implode(', ', array_keys($json));
+            $msg = "Service account JSON is missing required fields (client_email or private_key). Keys found: [{$keysFound}].";
             Log::warning("FirebasePushService: " . $msg);
             return ['success' => false, 'error' => $msg];
         }
