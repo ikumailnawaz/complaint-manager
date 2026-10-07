@@ -192,7 +192,7 @@
                             <!-- Actions -->
                             <td class="px-4 py-3.5 text-right space-x-1.5">
                                 @if(!empty($u->fcm_token))
-                                    <form method="POST" action="{{ route('users.test-push', $u) }}" class="inline">
+                                    <form method="POST" action="{{ \Illuminate\Support\Facades\Route::has('users.test-push') ? route('users.test-push', $u) : url('/users/' . $u->id . '/test-push') }}" class="inline">
                                         @csrf
                                         <button type="submit" class="inline-flex items-center px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 text-[11px] font-bold rounded-lg border border-amber-200 transition" title="Send live test push notification to {{ $u->name }}'s phone">
                                             <i class="fa-solid fa-bell mr-1 text-[10px] text-amber-600 animate-pulse"></i> Test Push
