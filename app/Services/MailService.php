@@ -19,7 +19,7 @@ class MailService
             $chainText = $this->buildThreadChainText($ticket);
             return [
                 'success' => true,
-                'message_id' => '<test-msg.' . uniqid() . '@qmstraders.com>',
+                'message_id' => '<test-msg.' . uniqid() . '@cmscompany.biz>',
                 'recipient' => $ticket->customer_email ?: 'operations@bank.com.pk',
                 'thread_chain_html' => $chainHtml,
                 'thread_chain_text' => $chainText,
@@ -758,7 +758,7 @@ HTML;
             $mail->AltBody = "Dear {$bankName} Operations Team,\n\nYour complaint has been assigned to Field Engineer: {$engineerName} ({$engineerCity}).\nTicket No: {$ticketNo}\nPriority: {$urgencyBadge}\nExpected Resolution: Within Defined TAT\nCMS Company Support." . $threadChainText;
 
             $mail->send();
-            $messageId = $mail->getLastMessageID() ?: ('<' . uniqid('msg.') . '@' . env('MAIL_HOST_DOMAIN', 'qmstraders.com') . '>');
+            $messageId = $mail->getLastMessageID() ?: ('<' . uniqid('msg.') . '@' . env('MAIL_HOST_DOMAIN', 'cmscompany.biz') . '>');
 
             // Save sent copy to IMAP Sent folder so Outlook / Webmail displays the reply in Sent Items & Conversation threads
             $this->saveToImapSentFolder($mail);
@@ -798,7 +798,7 @@ HTML;
             $chainText = $this->buildThreadChainText($ticket);
             return [
                 'success' => true,
-                'message_id' => '<test-res.' . uniqid() . '@qmstraders.com>',
+                'message_id' => '<test-res.' . uniqid() . '@cmscompany.biz>',
                 'recipient' => $ticket->customer_email ?: 'operations@bank.com.pk',
                 'thread_chain_html' => $chainHtml,
                 'thread_chain_text' => $chainText,
@@ -986,7 +986,7 @@ HTML;
             $mail->AltBody = "Dear {$ticket->bank_name} Operations Team,\n\nComplaint Ticket #{$ticket->ticket_no} has been RESOLVED.\nWork Summary: {$resolutionSummaryText}\nResolved By: {$engineerName}\n\nIf you require further support send email to support@cmscompany.biz\n\nCMS Technical Operations Support." . $threadChainText;
 
             $mail->send();
-            $messageId = $mail->getLastMessageID() ?: ('<' . uniqid('res.') . '@' . env('MAIL_HOST_DOMAIN', 'qmstraders.com') . '>');
+            $messageId = $mail->getLastMessageID() ?: ('<' . uniqid('res.') . '@' . env('MAIL_HOST_DOMAIN', 'cmscompany.biz') . '>');
 
             // Save sent copy to IMAP Sent folder so Outlook / Webmail displays the reply in Sent Items & Conversation threads
             $this->saveToImapSentFolder($mail);
@@ -1184,10 +1184,10 @@ HTML;
 
         try {
             $mail->isSMTP();
-            $mail->Host       = env('MAIL_HOST', 'mail.qmstraders.com');
+            $mail->Host       = env('MAIL_HOST', 'mail.cmscompany.biz');
             $mail->SMTPAuth   = true;
-            $mail->Username   = env('MAIL_USERNAME', 'noreply@qmstraders.com');
-            $mail->Password   = env('MAIL_PASSWORD', 'Nope1seem@1');
+            $mail->Username   = env('MAIL_USERNAME', 'support@cmscompany.biz');
+            $mail->Password   = env('MAIL_PASSWORD', '');
             
             $encryption = strtolower(env('MAIL_ENCRYPTION', 'ssl'));
             if ($encryption === 'ssl' || (int) env('MAIL_PORT', 465) === 465) {
@@ -1205,7 +1205,7 @@ HTML;
                 ],
             ];
 
-            $fromAddress = env('MAIL_FROM_ADDRESS', 'noreply@qmstraders.com');
+            $fromAddress = env('MAIL_FROM_ADDRESS', 'support@cmscompany.biz');
             $fromName    = env('MAIL_FROM_NAME', 'CMS Technical Operations Desk');
             $mail->setFrom($fromAddress, $fromName);
             $mail->addAddress(trim($toEmail));
@@ -1228,7 +1228,7 @@ HTML;
                 $mail->addCustomHeader('Thread-Topic', $threadTopic);
             }
 
-            $mail->Hostname = env('MAIL_HOST_DOMAIN', 'qmstraders.com');
+            $mail->Hostname = env('MAIL_HOST_DOMAIN', 'cmscompany.biz');
 
             $mail->Subject = $subject;
             $mail->isHTML(true);
@@ -1252,7 +1252,7 @@ HTML;
             $mail->AltBody = $bodyText;
 
             $mail->send();
-            $messageId = $mail->getLastMessageID() ?: ('<' . uniqid('msg.') . '@' . env('MAIL_HOST_DOMAIN', 'qmstraders.com') . '>');
+            $messageId = $mail->getLastMessageID() ?: ('<' . uniqid('msg.') . '@' . env('MAIL_HOST_DOMAIN', 'cmscompany.biz') . '>');
 
             // Save sent copy to IMAP Sent folder so Outlook / Webmail displays the reply in Sent Items & Conversation threads
             $this->saveToImapSentFolder($mail);
@@ -1284,10 +1284,10 @@ HTML;
     protected function configureSmtp(PHPMailer $mail): void
     {
         $mail->isSMTP();
-        $mail->Host       = env('MAIL_HOST', 'mail.qmstraders.com');
+        $mail->Host       = env('MAIL_HOST', 'mail.cmscompany.biz');
         $mail->SMTPAuth   = true;
-        $mail->Username   = env('MAIL_USERNAME', 'noreply@qmstraders.com');
-        $mail->Password   = env('MAIL_PASSWORD', 'Nope1seem@1');
+        $mail->Username   = env('MAIL_USERNAME', 'support@cmscompany.biz');
+        $mail->Password   = env('MAIL_PASSWORD', '');
         
         $encryption = strtolower(env('MAIL_ENCRYPTION', 'ssl'));
         if ($encryption === 'ssl' || (int) env('MAIL_PORT', 465) === 465) {
@@ -1307,10 +1307,10 @@ HTML;
         ];
 
         // Set Hostname for Message-ID and HELO so Message-ID domain is valid and not @127.0.0.1
-        $mail->Hostname = env('MAIL_HOST_DOMAIN', 'qmstraders.com');
+        $mail->Hostname = env('MAIL_HOST_DOMAIN', 'cmscompany.biz');
 
         // Default Sender
-        $fromAddress = env('MAIL_FROM_ADDRESS', 'noreply@qmstraders.com');
+        $fromAddress = env('MAIL_FROM_ADDRESS', 'support@cmscompany.biz');
         $fromName    = env('MAIL_FROM_NAME', 'CMS Technical Operations Desk');
         $mail->setFrom($fromAddress, $fromName);
 
@@ -1351,11 +1351,11 @@ HTML;
             return false;
         }
 
-        $host = env('IMAP_HOST', env('MAIL_HOST', 'mail.qmstraders.com'));
+        $host = env('IMAP_HOST', env('MAIL_HOST', 'mail.cmscompany.biz'));
         $port = (int) env('IMAP_PORT', 993);
         $encryption = strtolower(env('IMAP_ENCRYPTION', 'ssl'));
-        $username = env('IMAP_USERNAME', env('MAIL_USERNAME', 'noreply@qmstraders.com'));
-        $password = env('IMAP_PASSWORD', env('MAIL_PASSWORD', 'Nope1seem@1'));
+        $username = env('IMAP_USERNAME', env('MAIL_USERNAME', 'support@cmscompany.biz'));
+        $password = env('IMAP_PASSWORD', env('MAIL_PASSWORD', ''));
 
         if (empty($username) || empty($password)) {
             Log::warning("MailService: Missing IMAP credentials; cannot append to IMAP Sent.");

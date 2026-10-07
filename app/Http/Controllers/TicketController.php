@@ -572,7 +572,7 @@ class TicketController extends Controller
         // Record in InboxEmail so it shows up in Webmail Sent Items
         InboxEmail::create([
             'message_id' => $messageId,
-            'from_email' => env('MAIL_FROM_ADDRESS', 'noreply@qmstraders.com'),
+            'from_email' => env('MAIL_FROM_ADDRESS', 'support@cmscompany.biz'),
             'from_name' => env('MAIL_FROM_NAME', 'CMS Technical Operations Desk'),
             'to_email' => $ticket->customer_email,
             'cc_emails' => $ticket->customer_cc,
@@ -634,7 +634,7 @@ class TicketController extends Controller
         // Record in InboxEmail so it shows up in Webmail Sent Items
         InboxEmail::create([
             'message_id' => $messageId,
-            'from_email' => env('MAIL_FROM_ADDRESS', 'noreply@qmstraders.com'),
+            'from_email' => env('MAIL_FROM_ADDRESS', 'support@cmscompany.biz'),
             'from_name' => env('MAIL_FROM_NAME', 'CMS Technical Operations Desk'),
             'to_email' => $recipient,
             'cc_emails' => $ticket->customer_cc,

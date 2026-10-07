@@ -21,7 +21,7 @@
                     </span>
                 </div>
                 <div class="text-xs text-slate-400 font-mono flex items-center gap-2">
-                    <span>{{ $currentConfig['username'] ?: 'noreply@qmstraders.com' }}</span>
+                    <span>{{ $currentConfig['username'] ?: 'support@cmscompany.biz' }}</span>
                     <span>•</span>
                     <span>Host: {{ $currentConfig['host'] }}:{{ $currentConfig['port'] }}</span>
                 </div>
@@ -39,9 +39,18 @@
             <!-- Sync Mailbox Now -->
             <form action="{{ route('settings.email.sync') }}" method="POST" class="inline">
                 @csrf
-                <button type="submit" class="inline-flex items-center space-x-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 hover:border-slate-600 px-3.5 py-2 rounded-lg font-medium text-xs transition active:scale-95" title="Fetch newest emails from GoDaddy IMAP server">
+                <button type="submit" class="inline-flex items-center space-x-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 hover:border-slate-600 px-3.5 py-2 rounded-lg font-medium text-xs transition active:scale-95" title="Fetch newest emails from IMAP server">
                     <i class="fa-solid fa-rotate text-emerald-400"></i>
                     <span>Sync Mailbox</span>
+                </button>
+            </form>
+
+            <!-- Empty Mailbox -->
+            <form action="{{ route('settings.email.empty') }}" method="POST" class="inline" onsubmit="return confirm('Are you sure you want to empty the mailbox records?\n\nThis will clear all stored email logs in the database. Tickets already created from emails will NOT be deleted.\n\nProceed?');">
+                @csrf
+                <button type="submit" class="inline-flex items-center space-x-1.5 bg-slate-800 hover:bg-rose-900/60 text-slate-300 hover:text-rose-200 border border-slate-700 hover:border-rose-700/60 px-3 py-2 rounded-lg font-medium text-xs transition active:scale-95" title="Clear all stored emails in this mailbox">
+                    <i class="fa-regular fa-trash-can text-rose-400"></i>
+                    <span class="hidden sm:inline">Empty Mailbox</span>
                 </button>
             </form>
 
@@ -566,7 +575,7 @@
             <div class="flex items-center justify-between pt-2 border-t border-slate-100">
                 <span class="text-[11px] text-slate-500 flex items-center gap-1">
                     <i class="fa-solid fa-shield-halved text-emerald-500"></i>
-                    Sent from: <code class="text-sky-700 font-bold">{{ $currentConfig['username'] ?: 'noreply@qmstraders.com' }}</code>
+                    Sent from: <code class="text-sky-700 font-bold">{{ $currentConfig['username'] ?: 'support@cmscompany.biz' }}</code>
                 </span>
                 <div class="flex space-x-2">
                     <button type="button" onclick="closeComposeModal()" class="px-4 py-2 rounded-lg border border-slate-300 bg-white text-slate-700 text-xs font-medium hover:bg-slate-50">

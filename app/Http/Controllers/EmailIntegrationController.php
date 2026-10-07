@@ -81,13 +81,13 @@ class EmailIntegrationController extends Controller
         ];
 
         $currentConfig = [
-            'host' => env('IMAP_HOST', 'mail.qmstraders.com'),
+            'host' => env('IMAP_HOST', 'mail.cmscompany.biz'),
             'port' => env('IMAP_PORT', 993),
             'encryption' => env('IMAP_ENCRYPTION', 'ssl'),
-            'username' => env('IMAP_USERNAME', 'noreply@qmstraders.com'),
+            'username' => env('IMAP_USERNAME', 'support@cmscompany.biz'),
             'has_password' => !empty(env('IMAP_PASSWORD')),
             'gemini_key' => env('GEMINI_API_KEY', ''),
-            'smtp_host' => env('MAIL_HOST', 'mail.qmstraders.com'),
+            'smtp_host' => env('MAIL_HOST', 'mail.cmscompany.biz'),
             'smtp_port' => env('MAIL_PORT', 465),
         ];
 
@@ -107,6 +107,24 @@ class EmailIntegrationController extends Controller
         }
 
         return back()->with('error', "Mailbox sync failed: " . ($result['error'] ?? 'Unknown error connecting to GoDaddy IMAP.'));
+    }
+
+    /**
+     * Empty current mailbox database records (inbox_emails) and un-link tickets.
+     */
+    public function emptyMailbox(Request $request)
+    {
+        if (Auth::user()->isEngineer()) {
+            abort(403, 'Mailbox maintenance is reserved for Operations Administrators.');
+        }
+
+        $count = InboxEmail::count();
+
+        // Unlink foreign keys before deleting
+        InboxEmail::query()->update(['ticket_id' => null]);
+        InboxEmail::truncate();
+
+        return back()->with('success', "Mailbox has been emptied successfully! Cleared {$count} stored email records from the system.");
     }
 
     /**
@@ -405,7 +423,7 @@ class EmailIntegrationController extends Controller
             // Record sent message in InboxEmail with is_sent = true
             InboxEmail::create([
                 'message_id' => $result['message_id'],
-                'from_email' => env('MAIL_FROM_ADDRESS', 'noreply@qmstraders.com'),
+                'from_email' => env('MAIL_FROM_ADDRESS', 'support@cmscompany.biz'),
                 'from_name' => env('MAIL_FROM_NAME', 'CMS Technical Operations Desk'),
                 'to_email' => $email->from_email,
                 'cc_emails' => null,
@@ -456,7 +474,7 @@ class EmailIntegrationController extends Controller
         if ($result['success'] ?? false) {
             InboxEmail::create([
                 'message_id' => $result['message_id'],
-                'from_email' => env('MAIL_FROM_ADDRESS', 'noreply@qmstraders.com'),
+                'from_email' => env('MAIL_FROM_ADDRESS', 'support@cmscompany.biz'),
                 'from_name' => env('MAIL_FROM_NAME', 'CMS Technical Operations Desk'),
                 'to_email' => $request->to_email,
                 'cc_emails' => null,

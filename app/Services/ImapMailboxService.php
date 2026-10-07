@@ -11,11 +11,11 @@ class ImapMailboxService
 {
     public function syncMailbox(int $limit = 40): array
     {
-        $host = env('IMAP_HOST', 'mail.qmstraders.com');
+        $host = env('IMAP_HOST', 'mail.cmscompany.biz');
         $port = env('IMAP_PORT', 993);
         $encryption = env('IMAP_ENCRYPTION', 'ssl');
-        $username = env('IMAP_USERNAME', 'noreply@qmstraders.com');
-        $password = env('IMAP_PASSWORD', 'Nope1seem@1');
+        $username = env('IMAP_USERNAME', 'support@cmscompany.biz');
+        $password = env('IMAP_PASSWORD', '');
 
         if (empty($username) || empty($password)) {
             return [

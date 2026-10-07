@@ -122,6 +122,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/email', [EmailIntegrationController::class, 'index'])->name('email');
         Route::post('/email/save', [EmailIntegrationController::class, 'saveSettings'])->name('email.save');
         Route::post('/email/sync', [EmailIntegrationController::class, 'syncNow'])->name('email.sync');
+        Route::post('/email/empty', [EmailIntegrationController::class, 'emptyMailbox'])->name('email.empty');
         Route::post('/email/auto-triage', [EmailIntegrationController::class, 'autoTriageAll'])->name('email.auto-triage');
         Route::post('/email/compose', [EmailIntegrationController::class, 'composeEmail'])->name('email.compose');
         Route::post('/email/{email}/reply', [EmailIntegrationController::class, 'replyEmail'])->name('email.reply');
