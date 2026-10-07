@@ -11,16 +11,16 @@ class ImapMailboxService
 {
     public function syncMailbox(int $limit = 40): array
     {
-        $host = env('IMAP_HOST', 'mail.cmscompany.biz');
-        $port = env('IMAP_PORT', 993);
-        $encryption = env('IMAP_ENCRYPTION', 'ssl');
-        $username = env('IMAP_USERNAME', 'support@cmscompany.biz');
-        $password = env('IMAP_PASSWORD', '');
+        $host = config('mail.imap.host') ?: env('IMAP_HOST', config('mail.mailers.smtp.host', 'mail.cmscompany.biz'));
+        $port = (int) (config('mail.imap.port') ?: env('IMAP_PORT', 993));
+        $encryption = strtolower(config('mail.imap.encryption') ?: env('IMAP_ENCRYPTION', 'ssl'));
+        $username = config('mail.imap.username') ?: env('IMAP_USERNAME', config('mail.mailers.smtp.username', 'support@cmscompany.biz'));
+        $password = config('mail.imap.password') ?: env('IMAP_PASSWORD', config('mail.mailers.smtp.password', ''));
 
         if (empty($username) || empty($password)) {
             return [
                 'success' => false,
-                'error' => 'IMAP credentials not configured in .env',
+                'error' => 'IMAP credentials not configured in .env (username: ' . ($username ?: 'empty') . ', password: ' . (empty($password) ? 'empty' : 'set') . ')',
                 'new_count' => 0,
             ];
         }

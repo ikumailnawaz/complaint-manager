@@ -81,14 +81,14 @@ class EmailIntegrationController extends Controller
         ];
 
         $currentConfig = [
-            'host' => env('IMAP_HOST', 'mail.cmscompany.biz'),
-            'port' => env('IMAP_PORT', 993),
-            'encryption' => env('IMAP_ENCRYPTION', 'ssl'),
-            'username' => env('IMAP_USERNAME', 'support@cmscompany.biz'),
-            'has_password' => !empty(env('IMAP_PASSWORD')),
-            'gemini_key' => env('GEMINI_API_KEY', ''),
-            'smtp_host' => env('MAIL_HOST', 'mail.cmscompany.biz'),
-            'smtp_port' => env('MAIL_PORT', 465),
+            'host' => config('mail.imap.host') ?: env('IMAP_HOST', 'mail.cmscompany.biz'),
+            'port' => config('mail.imap.port') ?: env('IMAP_PORT', 993),
+            'encryption' => config('mail.imap.encryption') ?: env('IMAP_ENCRYPTION', 'ssl'),
+            'username' => config('mail.imap.username') ?: env('IMAP_USERNAME', 'support@cmscompany.biz'),
+            'has_password' => !empty(config('mail.imap.password') ?: env('IMAP_PASSWORD')),
+            'gemini_key' => config('services.gemini.key') ?: env('GEMINI_API_KEY', ''),
+            'smtp_host' => config('mail.mailers.smtp.host') ?: env('MAIL_HOST', 'mail.cmscompany.biz'),
+            'smtp_port' => config('mail.mailers.smtp.port') ?: env('MAIL_PORT', 465),
         ];
 
         return view('settings.email-setup', compact('emails', 'selectedEmail', 'counts', 'folder', 'search', 'currentConfig'));

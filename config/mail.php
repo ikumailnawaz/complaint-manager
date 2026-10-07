@@ -131,4 +131,23 @@ return [
         ],
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | IMAP Mailbox Settings & Fallbacks
+    |--------------------------------------------------------------------------
+    |
+    | Configuration for IMAP inbox synchronization and helpdesk threading.
+    |
+    */
+    'imap' => [
+        'host' => env('IMAP_HOST', 'mail.cmscompany.biz'),
+        'port' => (int) env('IMAP_PORT', 993),
+        'encryption' => env('IMAP_ENCRYPTION', 'ssl'),
+        'username' => env('IMAP_USERNAME', 'support@cmscompany.biz'),
+        'password' => env('IMAP_PASSWORD', ''),
+    ],
+
+    'host_domain' => env('MAIL_HOST_DOMAIN', 'cmscompany.biz'),
+    'auto_bcc' => env('MAIL_AUTO_BCC_SENDER', true),
+
 ];
