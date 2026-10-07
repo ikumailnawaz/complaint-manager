@@ -191,6 +191,19 @@
 
                             <!-- Actions -->
                             <td class="px-4 py-3.5 text-right space-x-1.5">
+                                @if(!empty($u->fcm_token))
+                                    <form method="POST" action="{{ route('users.test-push', $u) }}" class="inline">
+                                        @csrf
+                                        <button type="submit" class="inline-flex items-center px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 text-[11px] font-bold rounded-lg border border-amber-200 transition" title="Send live test push notification to {{ $u->name }}'s phone">
+                                            <i class="fa-solid fa-bell mr-1 text-[10px] text-amber-600 animate-pulse"></i> Test Push
+                                        </button>
+                                    </form>
+                                @else
+                                    <span class="inline-flex items-center px-2 py-1 bg-slate-100 text-slate-400 text-[10px] font-medium rounded-lg border border-slate-200" title="Engineer has not opened app to sync device yet">
+                                        <i class="fa-solid fa-mobile-screen-button mr-1 text-[9px]"></i> No Device
+                                    </span>
+                                @endif
+
                                 <a href="{{ route('users.edit', $u) }}" class="inline-flex items-center px-2.5 py-1 bg-slate-100 hover:bg-blue-50 hover:text-blue-700 text-slate-700 text-xs font-bold rounded-lg border border-slate-200 transition">
                                     <i class="fa-solid fa-pen-to-square mr-1 text-[10px]"></i> Edit
                                 </a>

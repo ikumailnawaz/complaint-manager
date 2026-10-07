@@ -1203,7 +1203,8 @@ class TicketController extends Controller
         unset($validated['sla_tat'], $validated['custom_sla_deadline']);
 
         // Handle assignment timestamp if engineer changed or freshly assigned
-        if (!empty($validated['assigned_engineer_id']) && $validated['assigned_engineer_id'] != $ticket->assigned_engineer_id) {
+        $engineerChanged = !empty($validated['assigned_engineer_id']) && $validated['assigned_engineer_id'] != $ticket->assigned_engineer_id;
+        if ($engineerChanged) {
             $validated['assigned_by_id'] = Auth::id();
             $validated['assigned_at'] = Carbon::now();
             $validated['whatsapp_notified'] = false;
@@ -1227,6 +1228,10 @@ class TicketController extends Controller
             'action' => 'updated',
             'notes' => 'Ticket details managed and finalized by ' . Auth::user()->name . '.',
         ]);
+
+        if ($engineerChanged && $ticket->assigned_engineer_id && $ticket->engineer) {
+            \App\Services\NotificationService::notifyTicketAssigned($ticket, $ticket->engineer);
+        }
 
         return redirect()->route('tickets.show', $ticket)->with('success', "Ticket {$ticket->ticket_no} updated and finalized successfully.");
     }

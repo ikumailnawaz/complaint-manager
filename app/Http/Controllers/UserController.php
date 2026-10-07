@@ -216,6 +216,32 @@ class UserController extends Controller
     }
 
     /**
+     * Dispatch an instant test push notification to the user's mobile device.
+     */
+    public function testPush(User $user)
+    {
+        if (empty($user->fcm_token)) {
+            return back()->with('error', "No mobile device registered for {$user->name}! Please have the engineer open the app and tap 'Device Push Notification Sync' in Account tab.");
+        }
+
+        $sent = \App\Services\FirebasePushService::sendToUser(
+            $user,
+            "⚡ Test Push Alert",
+            "Test notification received by {$user->name} at " . now()->format('h:i:s A'),
+            [
+                'type' => 'test_push',
+                'timestamp' => time(),
+            ]
+        );
+
+        if ($sent) {
+            return back()->with('success', "✅ Test push notification delivered to {$user->name}'s phone!");
+        }
+
+        return back()->with('error', "❌ Push dispatch failed. Check storage/app/firebase-service-account.json on live server or storage/logs/laravel.log.");
+    }
+
+    /**
      * Get list of assignable roles based on current user privileges.
      */
     protected function getAvailableRoles(): array

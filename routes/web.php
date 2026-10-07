@@ -272,6 +272,7 @@ Route::middleware('auth')->group(function () {
         Route::delete('/{user}', [UserController::class, 'destroy'])->name('destroy');
         Route::match(['post', 'patch'], '/{user}/toggle-status', [UserController::class, 'toggleStatus'])->name('toggle-status');
         Route::match(['post', 'patch'], '/{user}/toggle-status/alias', [UserController::class, 'toggleStatus'])->name('toggleStatus');
+        Route::post('/{user}/test-push', [UserController::class, 'testPush'])->name('test-push');
     });
 });
 
