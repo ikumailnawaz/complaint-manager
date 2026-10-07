@@ -67,8 +67,18 @@ class FirebasePushService
 
             $data = $header . '.' . $claim;
             $signature = '';
-            if (!openssl_sign($data, $signature, $json['private_key'], 'sha256')) {
-                Log::error("FirebasePushService: OpenSSL failed to sign JWT assertion.");
+            $key = openssl_pkey_get_private($json['private_key']);
+            if (!$key) {
+                $err = openssl_error_string() ?: 'Invalid private key format';
+                Log::error("FirebasePushService: OpenSSL cannot parse private key: " . $err);
+                session()->flash('fcm_oauth_error', "OpenSSL private key error: " . $err);
+                return null;
+            }
+
+            if (!openssl_sign($data, $signature, $key, OPENSSL_ALGO_SHA256)) {
+                $err = openssl_error_string() ?: 'Unknown sign error';
+                Log::error("FirebasePushService: OpenSSL failed to sign JWT assertion: " . $err);
+                session()->flash('fcm_oauth_error', "OpenSSL sign error: " . $err);
                 return null;
             }
 
@@ -85,7 +95,9 @@ class FirebasePushService
                 return $response->json('access_token');
             }
 
-            Log::error("FirebasePushService: OAuth2 token exchange failed: " . $response->body());
+            $errBody = $response->body();
+            Log::error("FirebasePushService: OAuth2 token exchange failed: " . $errBody);
+            session()->flash('fcm_oauth_error', "Google OAuth2 endpoint rejected JWT: " . $errBody);
             return null;
         });
     }

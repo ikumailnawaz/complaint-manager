@@ -27,9 +27,11 @@ class TestFcmPush extends Command
         $this->info("✅ File exists (" . filesize($credPath) . " bytes).");
 
         $this->line("2. Testing Google OAuth2 token generation...");
+        \Illuminate\Support\Facades\Cache::forget('firebase_fcm_oauth_token');
         $token = \App\Services\FirebasePushService::getAccessToken();
         if (!$token) {
-            $this->error("❌ Failed to obtain OAuth2 token from Google!");
+            $err = session('fcm_oauth_error', 'Check storage/logs/laravel.log');
+            $this->error("❌ Failed to obtain OAuth2 token from Google: " . $err);
             return 1;
         }
         $this->info("✅ OAuth2 token obtained successfully: " . substr($token, 0, 20) . "...");
