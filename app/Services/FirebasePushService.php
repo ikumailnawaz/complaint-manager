@@ -90,12 +90,13 @@ class FirebasePushService
 
     /**
      * Send native Android WhatsApp-style heads-up Push Notification to a user.
+     * @return array{success: bool, error: ?string}
      */
-    public static function sendToUser(User $user, string $title, string $body, array $data = []): bool
+    public static function sendToUser(User $user, string $title, string $body, array $data = []): array
     {
         if (empty($user->fcm_token)) {
             Log::info("FirebasePushService: User [{$user->id}] ({$user->name}) has no registered FCM token.");
-            return false;
+            return ['success' => false, 'error' => "User {$user->name} has no registered FCM device token."];
         }
 
         return self::sendToToken($user->fcm_token, $title, $body, $data);
@@ -103,21 +104,31 @@ class FirebasePushService
 
     /**
      * Send push notification to a specific FCM device token via HTTP v1 API.
+     * @return array{success: bool, error: ?string}
      */
-    public static function sendToToken(string $fcmToken, string $title, string $body, array $data = []): bool
+    public static function sendToToken(string $fcmToken, string $title, string $body, array $data = []): array
     {
         $path = self::getCredentialsPath();
         if (!file_exists($path)) {
-            return false;
+            $msg = "Service account file missing at [{$path}]. Please upload firebase-service-account.json into storage/app/";
+            Log::warning("FirebasePushService: " . $msg);
+            return ['success' => false, 'error' => $msg];
         }
 
         $json = json_decode(file_get_contents($path), true);
+        if (!$json || empty($json['client_email']) || empty($json['private_key'])) {
+            $msg = "Invalid JSON in service account file at [{$path}].";
+            Log::warning("FirebasePushService: " . $msg);
+            return ['success' => false, 'error' => $msg];
+        }
+
         $projectId = $json['project_id'] ?? 'cms-engineer-portal';
 
         $accessToken = self::getAccessToken();
         if (!$accessToken) {
-            Log::warning("FirebasePushService: Cannot send push, access token unavailable.");
-            return false;
+            $msg = "Failed to obtain Google OAuth2 token. Verify private key syntax and that OpenSSL PHP extension is enabled.";
+            Log::warning("FirebasePushService: " . $msg);
+            return ['success' => false, 'error' => $msg];
         }
 
         // Convert all data values to strings (FCM requirement)
@@ -159,10 +170,11 @@ class FirebasePushService
 
         if ($response->successful()) {
             Log::info("FirebasePushService: Push notification delivered successfully to token [" . substr($fcmToken, 0, 15) . "...].");
-            return true;
+            return ['success' => true, 'error' => null];
         }
 
-        Log::warning("FirebasePushService: FCM delivery failed: " . $response->body());
-        return false;
+        $errMsg = "FCM Google API Error (" . $response->status() . "): " . $response->body();
+        Log::warning("FirebasePushService: " . $errMsg);
+        return ['success' => false, 'error' => $errMsg];
     }
 }

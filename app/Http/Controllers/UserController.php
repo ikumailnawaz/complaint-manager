@@ -224,7 +224,7 @@ class UserController extends Controller
             return back()->with('error', "No mobile device registered for {$user->name}! Please have the engineer open the app and tap 'Device Push Notification Sync' in Account tab.");
         }
 
-        $sent = \App\Services\FirebasePushService::sendToUser(
+        $result = \App\Services\FirebasePushService::sendToUser(
             $user,
             "⚡ Test Push Alert",
             "Test notification received by {$user->name} at " . now()->format('h:i:s A'),
@@ -234,11 +234,12 @@ class UserController extends Controller
             ]
         );
 
-        if ($sent) {
+        if ($result['success']) {
             return back()->with('success', "✅ Test push notification delivered to {$user->name}'s phone!");
         }
 
-        return back()->with('error', "❌ Push dispatch failed. Check storage/app/firebase-service-account.json on live server or storage/logs/laravel.log.");
+        $detail = $result['error'] ?? 'Unknown error';
+        return back()->with('error', "❌ Push dispatch failed: {$detail}");
     }
 
     /**

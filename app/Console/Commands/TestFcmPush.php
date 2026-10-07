@@ -55,17 +55,17 @@ class TestFcmPush extends Command
         }
 
         $this->line("4. Sending test push notification to User #{$targetUser->id} ({$targetUser->name})...");
-        $sent = \App\Services\FirebasePushService::sendToUser(
+        $result = \App\Services\FirebasePushService::sendToUser(
             $targetUser,
             "⚡ Test Assignment Push Notification",
             "This is a live test notification from CMS Engineer Portal at " . date('h:i:s A'),
             ['type' => 'test_push', 'timestamp' => time()]
         );
 
-        if ($sent) {
+        if ($result['success']) {
             $this->info("🎉 SUCCESS: Push notification successfully accepted by Firebase and sent to device!");
         } else {
-            $this->error("❌ FAILED: Firebase rejected or failed to deliver push notification. Check storage/logs/laravel.log.");
+            $this->error("❌ FAILED: " . ($result['error'] ?? 'Unknown error'));
         }
 
         return 0;
