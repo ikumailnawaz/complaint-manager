@@ -183,7 +183,6 @@ class FirebasePushService
                         'channel_id'             => 'ticket_alerts_channel',
                         'default_sound'          => true,
                         'default_vibrate_timings'=> true,
-                        'priority'               => 'MAX',
                         'visibility'             => 'PUBLIC',
                         'notification_priority'  => 'PRIORITY_MAX',
                     ],
