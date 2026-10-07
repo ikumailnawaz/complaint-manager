@@ -35,6 +35,7 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     // Tour Expenses
     Route::get('/engineer/expenses', [MobileApiController::class, 'getExpenses'])->name('api.engineer.expenses');
     Route::post('/engineer/expenses', [MobileApiController::class, 'submitExpense'])->name('api.engineer.expenses.store');
+    Route::post('/engineer/expenses/{id}/resubmit', [MobileApiController::class, 'resubmitExpense'])->name('api.engineer.expenses.resubmit');
 
     // Spare Parts & Personal Advance Envelope
     Route::get('/engineer/envelope', [MobileApiController::class, 'getEnvelope'])->name('api.engineer.envelope');

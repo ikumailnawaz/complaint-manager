@@ -758,6 +758,40 @@ class MobileApiController extends Controller
             ? round($distance * $suggestedRatePerKm, 2)
             : (float) $request->claimed_amount;
 
+        // If an existing rejected claim exists for this ticket by this engineer, update it to avoid duplicate rows
+        $existingRejected = $ticket->expenseClaims()
+            ->where('engineer_id', $user->id)
+            ->where('status', 'rejected')
+            ->latest()
+            ->first();
+
+        if ($existingRejected) {
+            $updateData = [
+                'from_city'          => $request->from_city ?: ($user->base_city ?: 'Origin'),
+                'to_city'            => $request->to_city ?: ($ticket->branch_location ?: 'Destination'),
+                'trip_type'          => $request->trip_type,
+                'category'           => $category,
+                'description'        => $request->description ?: "Mobile claim for Ticket #{$ticket->ticket_no}",
+                'ai_distance_km'     => $distance,
+                'ai_estimated_hours' => $estimatedHours,
+                'suggested_amount'   => $suggestedAmount,
+                'claimed_amount'     => $request->claimed_amount,
+                'status'             => 'submitted',
+                'admin_notes'        => 'Re-submitted by engineer: ' . ($request->description ?: 'Updated claim details and amount'),
+                'resubmission_count' => ((int)$existingRejected->resubmission_count) + 1,
+            ];
+            if ($voucherPath) {
+                $updateData['voucher_file'] = $voucherPath;
+            }
+            $existingRejected->update($updateData);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Tour expense re-submitted successfully for audit.',
+                'claim'   => $existingRejected->fresh(),
+            ]);
+        }
+
         $claim = ExpenseClaim::create([
             'ticket_id'          => $ticket->id,
             'engineer_id'        => $user->id,
@@ -778,6 +812,68 @@ class MobileApiController extends Controller
             'success' => true,
             'message' => 'Tour expense submitted successfully for audit.',
             'claim'   => $claim,
+        ]);
+    }
+
+    /**
+     * 9b. Re-submit a Rejected Tour Expense Claim
+     */
+    public function resubmitExpense($id, Request $request)
+    {
+        $user = $request->user();
+        $claim = ExpenseClaim::findOrFail($id);
+
+        if ($user->isEngineer() && (int)$claim->engineer_id !== (int)$user->id) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized. You can only resubmit your own expense claims.',
+            ], 403);
+        }
+
+        if ($claim->status !== 'rejected') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Only rejected expense claims can be re-submitted for audit review.',
+            ], 422);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'claimed_amount' => 'required|numeric|min:1',
+            'voucher_file'   => 'nullable|file|mimes:pdf,jpg,jpeg,png,webp,gif|max:10240',
+            'notes'          => 'nullable|string|max:1000',
+            'category'       => 'nullable|in:travel,fuel,accommodation,parts,food,misc',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed: ' . implode(', ', $validator->errors()->all()),
+                'errors'  => $validator->errors(),
+            ], 422);
+        }
+
+        $note = $request->notes ? trim($request->notes) : 'Updated voucher and amount';
+        $updateData = [
+            'claimed_amount'     => (float) $request->claimed_amount,
+            'status'             => 'submitted',
+            'admin_notes'        => 'Re-submitted by engineer: ' . $note,
+            'resubmission_count' => ((int)$claim->resubmission_count) + 1,
+        ];
+
+        if ($request->filled('category')) {
+            $updateData['category'] = $request->category;
+        }
+
+        if ($request->hasFile('voucher_file')) {
+            $updateData['voucher_file'] = $request->file('voucher_file')->store('vouchers', 'public');
+        }
+
+        $claim->update($updateData);
+
+        return response()->json([
+            'success' => true,
+            'message' => "Expense claim #{$claim->id} re-submitted successfully for audit.",
+            'claim'   => $claim->fresh(),
         ]);
     }
 
