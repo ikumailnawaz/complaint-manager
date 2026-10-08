@@ -76,6 +76,7 @@ class FetchBankEmailsCommand extends Command
         foreach (array_slice($emails, 0, $limit) as $mailId) {
             $header = imap_headerinfo($inbox, $mailId);
             $subject = isset($header->subject) ? mb_decode_mimeheader($header->subject) : '(No Subject)';
+            $subject = $this->toUtf8($subject);
             $from = isset($header->from[0]) ? ($header->from[0]->mailbox . '@' . $header->from[0]->host) : 'unknown@bank.com';
 
             $this->line("--------------------------------------------------");
@@ -216,7 +217,7 @@ class FetchBankEmailsCommand extends Command
         $body = preg_replace('/Content-Type:[^\r\n]*/i', '', $body);
         $body = preg_replace('/Content-Transfer-Encoding:[^\r\n]*/i', '', $body);
 
-        return trim(strip_tags($body));
+        return $this->toUtf8(trim(strip_tags($body)));
     }
 
     private function extractBodyPart($inbox, $mailId, $structure, string $partNumber): string
@@ -258,5 +259,28 @@ class FetchBankEmailsCommand extends Command
             return quoted_printable_decode($data);
         }
         return $data;
+    }
+
+    private function toUtf8(?string $str): string
+    {
+        if ($str === null || $str === '') {
+            return '';
+        }
+
+        if (!mb_check_encoding($str, 'UTF-8')) {
+            $converted = @mb_convert_encoding($str, 'UTF-8', 'Windows-1252');
+            if ($converted !== false && mb_check_encoding($converted, 'UTF-8')) {
+                $str = $converted;
+            } else {
+                $converted = @iconv('UTF-8', 'UTF-8//IGNORE', $str);
+                $str = $converted !== false ? $converted : @mb_convert_encoding($str, 'UTF-8', 'UTF-8');
+            }
+        }
+
+        if (function_exists('mb_scrub')) {
+            $str = mb_scrub($str, 'UTF-8');
+        }
+
+        return $str;
     }
 }
