@@ -17,6 +17,9 @@ class Kernel extends ConsoleKernel
 
         // Detect missed Preventive Maintenance slots and advance schedule
         $schedule->command('pm:mark-missed')->dailyAt('00:05')->withoutOverlapping();
+
+        // Background sync incoming complaint emails from GoDaddy IMAP
+        $schedule->command('tickets:fetch-emails --limit=30')->everyTenMinutes()->withoutOverlapping();
     }
 
     /**

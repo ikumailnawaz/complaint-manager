@@ -110,10 +110,10 @@ class EmailIntegrationController extends Controller
             if ($serverSearch) {
                 $msg .= " Filtered by search term '{$serverSearch}'.";
             }
-            return back()->with('success', $msg);
+            return redirect()->route('settings.email')->with('success', $msg);
         }
 
-        return back()->with('error', "Mailbox sync failed: " . ($result['error'] ?? 'Unknown error connecting to IMAP.'));
+        return redirect()->route('settings.email')->with('error', "Mailbox sync failed: " . ($result['error'] ?? 'Unknown error connecting to IMAP.'));
     }
 
     /**

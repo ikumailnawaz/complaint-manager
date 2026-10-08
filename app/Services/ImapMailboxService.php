@@ -25,21 +25,30 @@ class ImapMailboxService
             ];
         }
 
-        @ini_set('max_execution_time', '300');
-        $mailbox = "{" . "{$host}:{$port}/imap/{$encryption}/novalidate-cert}INBOX";
-
-        // Open IMAP stream
-        $inbox = @imap_open($mailbox, $username, $password);
-
-        if (!$inbox) {
-            $err = imap_last_error();
-            Log::error("ImapMailboxService: Connection failure: {$err}");
+        if (!function_exists('imap_open')) {
             return [
                 'success' => false,
-                'error' => "Failed to connect to IMAP server: {$err}",
+                'error' => 'The PHP IMAP extension (php-imap) is not installed or enabled on this server. Please enable it in cPanel -> Select PHP Version -> Extensions -> imap.',
                 'new_count' => 0,
             ];
         }
+
+        @ini_set('max_execution_time', '300');
+        $mailbox = "{" . "{$host}:{$port}/imap/{$encryption}/novalidate-cert}INBOX";
+
+        try {
+            // Open IMAP stream
+            $inbox = @imap_open($mailbox, $username, $password);
+
+            if (!$inbox) {
+                $err = imap_last_error();
+                Log::error("ImapMailboxService: Connection failure: {$err}");
+                return [
+                    'success' => false,
+                    'error' => "Failed to connect to IMAP server: {$err}",
+                    'new_count' => 0,
+                ];
+            }
 
         $totalMsgs = imap_num_msg($inbox);
         if ($totalMsgs === 0) {
@@ -174,6 +183,14 @@ class ImapMailboxService
             'new_count' => $newCount,
             'total' => $totalMsgs,
         ];
+        } catch (\Throwable $e) {
+            Log::error("ImapMailboxService: Exception during sync: " . $e->getMessage());
+            return [
+                'success' => false,
+                'error' => 'IMAP sync exception: ' . $e->getMessage(),
+                'new_count' => 0,
+            ];
+        }
     }
 
     private function getMailBodyText($inbox, $mailId): string
