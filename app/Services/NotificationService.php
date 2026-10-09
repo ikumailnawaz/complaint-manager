@@ -64,6 +64,74 @@ class NotificationService
     }
 
     /**
+     * Notify every aligned engineer (and admins) that a resolved/closed ticket was reopened.
+     */
+    public static function notifyTicketReopened(Ticket $ticket, \App\Models\TicketCycle $cycle, string $reason): void
+    {
+        $tour = $cycle->cycle_no;
+        $title = "Ticket Reopened (Tour {$tour}): #{$ticket->ticket_no}";
+        $message = "{$ticket->bank_name} ({$ticket->branch_location}) reopened. Reason: {$reason}";
+
+        foreach ($ticket->activeEngineers() as $engineer) {
+            AppNotification::create([
+                'user_id' => $engineer->id,
+                'type' => 'ticket_reopened',
+                'title' => $title,
+                'message' => $message,
+                'link' => route('tickets.show', $ticket),
+                'icon' => 'fa-solid fa-rotate-left',
+                'color' => 'rose',
+                'data' => ['ticket_id' => $ticket->id, 'ticket_no' => $ticket->ticket_no, 'cycle_no' => $tour],
+            ]);
+
+            try {
+                FirebasePushService::sendToUser($engineer, $title, $message, [
+                    'ticket_id' => (string) $ticket->id,
+                    'ticket_no' => (string) $ticket->ticket_no,
+                    'type' => 'ticket_reopened',
+                ]);
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('FCM Push failed for ticket reopen: ' . $e->getMessage());
+            }
+        }
+
+        AppNotification::create([
+            'user_id' => null,
+            'role_target' => 'admin',
+            'type' => 'ticket_reopened',
+            'title' => $title,
+            'message' => "Reopened. Engineers have been notified. Reason: {$reason}",
+            'link' => route('tickets.show', $ticket),
+            'icon' => 'fa-solid fa-rotate-left',
+            'color' => 'rose',
+            'data' => ['ticket_id' => $ticket->id, 'cycle_no' => $tour],
+        ]);
+    }
+
+    /**
+     * Notify engineers who were added to (or removed from) a ticket.
+     */
+    public static function notifyEngineerAlignment(Ticket $ticket, array $added, array $removed): void
+    {
+        foreach ($added as $engineer) {
+            self::notifyTicketAssigned($ticket, $engineer);
+        }
+
+        foreach ($removed as $engineer) {
+            AppNotification::create([
+                'user_id' => $engineer->id,
+                'type' => 'ticket_unassigned',
+                'title' => "Removed from Ticket: #{$ticket->ticket_no}",
+                'message' => "You are no longer aligned to {$ticket->bank_name} ({$ticket->branch_location}).",
+                'link' => route('tickets.show', $ticket),
+                'icon' => 'fa-solid fa-user-minus',
+                'color' => 'slate',
+                'data' => ['ticket_id' => $ticket->id],
+            ]);
+        }
+    }
+
+    /**
      * Notify Office Staff and Managers when an engineer creates a part request.
      */
     public static function notifyPartRequestCreated(PartRequest $partRequest): void

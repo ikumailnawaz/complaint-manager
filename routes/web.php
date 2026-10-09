@@ -73,8 +73,11 @@ Route::middleware('auth')->group(function () {
         Route::post('/{ticket}/undo-resolve', [TicketController::class, 'undoResolve'])->name('undo-resolve');
         Route::post('/{ticket}/upload-document', [TicketController::class, 'uploadResolutionDocument'])->name('upload-document');
         Route::get('/{ticket}/document', [TicketController::class, 'viewSupportingDocument'])->name('document');
+        Route::get('/{ticket}/document/download', [TicketController::class, 'downloadSupportingDocument'])->name('download-document');
+        Route::get('/documents/{document}/download', [TicketController::class, 'downloadSpecificDocument'])->name('download-specific-document');
         Route::post('/{ticket}/update-document', [TicketController::class, 'updateSupportingDocument'])->name('update-document');
         Route::post('/{ticket}/close', [TicketController::class, 'closeTicket'])->name('close');
+        Route::post('/{ticket}/reopen', [TicketController::class, 'reopenTicket'])->name('reopen');
         Route::post('/{ticket}/request-approval', [ApprovalController::class, 'requestApproval'])->name('request-approval');
         Route::post('/{ticket}/grant-approval', [ApprovalController::class, 'grantApproval'])->name('grant-approval');
         Route::delete('/{ticket}', [TicketController::class, 'destroy'])->name('destroy');

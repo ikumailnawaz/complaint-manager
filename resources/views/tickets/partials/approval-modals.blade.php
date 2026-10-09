@@ -1,5 +1,5 @@
 <!-- MODAL: MARK APPROVAL ARRIVED (Admin Only) -->
-<div id="grantApprovalModal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4">
+<div id="grantApprovalModal" style="display: none;" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4">
     <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 transform transition-all">
         <div class="flex items-center justify-between pb-4 border-b border-slate-100">
             <div class="flex items-center space-x-3">
@@ -82,11 +82,17 @@
         var remarksElem = document.getElementById('grantApprovalRemarks');
         if (remarksElem) remarksElem.value = '';
         var modal = document.getElementById('grantApprovalModal');
-        if (modal) modal.classList.remove('hidden');
+        if (modal) {
+            modal.style.display = 'flex';
+            modal.classList.remove('hidden');
+        }
     }
 
     function closeGrantApprovalModal() {
         var modal = document.getElementById('grantApprovalModal');
-        if (modal) modal.classList.add('hidden');
+        if (modal) {
+            modal.style.display = 'none';
+            modal.classList.add('hidden');
+        }
     }
 </script>

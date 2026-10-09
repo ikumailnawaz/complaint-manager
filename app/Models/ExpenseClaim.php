@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class ExpenseClaim extends Model
 {
     use HasFactory;
+    use \App\Models\Concerns\TagsTicketCycle;
 
     protected $fillable = [
         'ticket_id',
@@ -31,6 +32,8 @@ class ExpenseClaim extends Model
         'payment_reference',
         'paid_at',
         'paid_by_id',
+        'cycle_id',
+        'tour_no',
     ];
 
     protected $casts = [
@@ -54,5 +57,17 @@ class ExpenseClaim extends Model
     public function paidBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'paid_by_id');
+    }
+
+    /**
+     * Applied Rate: Claimed Amount / AI Distance KM.
+     * Returns null if distance is missing or <= 0.
+     */
+    public function getAppliedRateAttribute(): ?float
+    {
+        if ($this->ai_distance_km && $this->ai_distance_km > 0) {
+            return round((float) $this->claimed_amount / (float) $this->ai_distance_km, 2);
+        }
+        return null;
     }
 }

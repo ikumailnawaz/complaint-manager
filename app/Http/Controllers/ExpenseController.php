@@ -41,7 +41,7 @@ class ExpenseController extends Controller
             $notSubmittedQuery = Ticket::with(['assignedEngineer'])
                 ->doesntHave('expenseClaims')
                 ->when($user->isEngineer(), function ($q) use ($user) {
-                    $q->where('assigned_engineer_id', $user->id);
+                    $q->forEngineer($user->id);
                 })
                 ->when($engineerId, function ($q, $eid) {
                     $q->where('assigned_engineer_id', $eid);
@@ -128,7 +128,7 @@ class ExpenseController extends Controller
         // Summary metrics
         $baseClaimsQuery = ExpenseClaim::when($user->isEngineer(), fn($q) => $q->where('engineer_id', $user->id));
         $notSubmittedCount = Ticket::doesntHave('expenseClaims')
-            ->when($user->isEngineer(), fn($q) => $q->where('assigned_engineer_id', $user->id))
+            ->when($user->isEngineer(), fn($q) => $q->forEngineer($user->id))
             ->count();
 
         $stats = [
@@ -152,7 +152,7 @@ class ExpenseController extends Controller
 
         $claimableTickets = Ticket::when($user->isEngineer(), function ($q) use ($user) {
                 $q->where(function ($sq) use ($user) {
-                    $sq->where('assigned_engineer_id', $user->id)
+                    $sq->forEngineer($user->id)
                        ->orWhere('original_field_engineer_id', $user->id);
                 });
             })
@@ -185,7 +185,7 @@ class ExpenseController extends Controller
         $user = Auth::user();
         $tickets = Ticket::when($user->isEngineer(), function ($q) use ($user) {
             $q->where(function ($sq) use ($user) {
-                $sq->where('assigned_engineer_id', $user->id)
+                $sq->forEngineer($user->id)
                    ->orWhere('original_field_engineer_id', $user->id);
             });
         })
@@ -215,9 +215,15 @@ class ExpenseController extends Controller
 
         $ticket = Ticket::findOrFail($validated['ticket_id']);
 
-        // STRICT CLAIM AUDIT POLICY: Once an expense is created against a ticket, another claim cannot be created until Operations Manager rejects it
-        if ($ticket->hasActiveExpenseClaim()) {
-            return back()->with('error', "STRICT CLAIM POLICY: An active expense claim is already pending or approved for Ticket #{$ticket->ticket_no}. A new claim cannot be submitted unless Operations Management rejects the existing claim.");
+        // Engineers can only claim on tickets they are aligned to (lead or support).
+        if (Auth::user()->isEngineer() && !$ticket->hasEngineer(Auth::user()) && (int) $ticket->original_field_engineer_id !== (int) Auth::id()) {
+            abort(403, 'You are not aligned to this ticket, so you cannot claim expense against it.');
+        }
+
+        // STRICT CLAIM AUDIT POLICY: Once this engineer has an active claim for the current tour, another cannot be created until it is rejected.
+        // Each aligned engineer claims separately; a reopened ticket starts a new tour with a fresh claim allowance.
+        if ($ticket->hasActiveExpenseClaim(Auth::id())) {
+            return back()->with('error', "STRICT CLAIM POLICY: You already have an active expense claim pending or approved for Ticket #{$ticket->ticket_no} (Tour {$ticket->current_cycle_no}). A new claim cannot be submitted unless Operations Management rejects the existing claim.");
         }
 
         // Workshop Policy: Check eligibility
@@ -235,7 +241,7 @@ class ExpenseController extends Controller
         }
 
         $ticket = Ticket::findOrFail($validated['ticket_id']);
-        $engineer = $ticket->assignedEngineer ?: Auth::user();
+        $engineer = Auth::user()->isEngineer() ? Auth::user() : ($ticket->assignedEngineer ?: Auth::user());
 
         // Origin: Home coordinates / Home address / Base city
         $origin = !empty($engineer->home_coordinates)
@@ -620,6 +626,7 @@ class ExpenseController extends Controller
             $totalDistance = round((float) $engClaims->sum('ai_distance_km'), 2);
             $totalCost = round((float) $engClaims->sum('claimed_amount'), 2);
             $avgCost = $count > 0 ? round($totalCost / $count, 2) : 0.00;
+            $avgPerKm = $totalDistance > 0 ? round($totalCost / $totalDistance, 2) : 0.00;
 
             return [
                 'engineer_name' => $engineer ? $engineer->name : 'Unassigned / Other',
@@ -627,6 +634,7 @@ class ExpenseController extends Controller
                 'total_ai_distance' => $totalDistance,
                 'avg_tour_cost' => $avgCost,
                 'total_tour_cost' => $totalCost,
+                'avg_per_km_cost' => $avgPerKm,
             ];
         })->values();
 
@@ -653,6 +661,7 @@ class ExpenseController extends Controller
             $grandTotalCost += $s['total_tour_cost'];
         }
         $overallAvg = $totalCount > 0 ? round($grandTotalCost / $totalCount, 2) : 0.00;
+        $overallAvgPerKm = $totalDistance > 0 ? round($grandTotalCost / $totalDistance, 2) : 0.00;
 
         $xml = view('expenses.exports.excel_multisheet', compact(
             'claims',
@@ -660,7 +669,8 @@ class ExpenseController extends Controller
             'totalCount',
             'totalDistance',
             'grandTotalCost',
-            'overallAvg'
+            'overallAvg',
+            'overallAvgPerKm'
         ))->render();
 
         return response($xml, 200, [
@@ -692,7 +702,9 @@ class ExpenseController extends Controller
                 'Ticket No',
                 'Bank Name',
                 'Branch / City',
+                'Branch Address',
                 'Engineer Name',
+                'Engineer Location',
                 'Category',
                 'Description',
                 'From City',
@@ -700,7 +712,7 @@ class ExpenseController extends Controller
                 'Trip Type',
                 'AI Distance (KM)',
                 'Claimed Amount (PKR)',
-                'Suggested Amount (PKR)',
+                'Applied Rate (PKR/KM)',
                 'Lifecycle Status',
                 'Settlement Status',
                 'Payment Method',
@@ -715,7 +727,9 @@ class ExpenseController extends Controller
                     $c->ticket?->ticket_no ?? 'N/A',
                     $c->ticket?->bank_name ?? 'N/A',
                     $c->ticket?->branch_location ?? $c->to_city,
+                    $c->ticket?->branch_address ?? 'N/A',
                     $c->engineer?->name ?? 'N/A',
+                    $c->engineer?->base_city ?? ($c->engineer?->home_address ?? 'N/A'),
                     strtoupper($c->category ?? 'TRAVEL'),
                     $c->description ?? 'N/A',
                     $c->from_city,
@@ -723,7 +737,7 @@ class ExpenseController extends Controller
                     ucwords(str_replace('_', ' ', $c->trip_type)),
                     number_format($c->ai_distance_km ?? 0, 2, '.', ''),
                     number_format($c->claimed_amount, 2, '.', ''),
-                    number_format($c->suggested_amount ?? 0, 2, '.', ''),
+                    $c->applied_rate !== null ? number_format($c->applied_rate, 2, '.', '') : 'N/A',
                     strtoupper($c->status),
                     $c->status === 'paid' ? 'PAID & SETTLED' : 'UNPAID & UNSETTLED',
                     strtoupper(str_replace('_', ' ', $c->payment_method ?? 'N/A')),
@@ -743,7 +757,8 @@ class ExpenseController extends Controller
                 "Exp No's",
                 'Total AI Estimated Distance (KM)',
                 'Average Tour Cost (PKR)',
-                'Total Tour Cost (PKR)'
+                'Total Tour Cost (PKR)',
+                'Average Per KM Cost (PKR)'
             ]);
 
             $totalCount = 0;
@@ -760,17 +775,20 @@ class ExpenseController extends Controller
                     $s['exp_count'],
                     number_format($s['total_ai_distance'], 2, '.', ''),
                     number_format($s['avg_tour_cost'], 2, '.', ''),
-                    number_format($s['total_tour_cost'], 2, '.', '')
+                    number_format($s['total_tour_cost'], 2, '.', ''),
+                    number_format($s['avg_per_km_cost'] ?? 0, 2, '.', '')
                 ]);
             }
 
             $overallAvg = $totalCount > 0 ? ($grandTotalCost / $totalCount) : 0;
+            $overallAvgPerKm = $totalDistance > 0 ? ($grandTotalCost / $totalDistance) : 0;
             fputcsv($handle, [
                 'TOTAL / ALL ENGINEERS',
                 $totalCount,
                 number_format($totalDistance, 2, '.', ''),
                 number_format($overallAvg, 2, '.', ''),
-                number_format($grandTotalCost, 2, '.', '')
+                number_format($grandTotalCost, 2, '.', ''),
+                number_format($overallAvgPerKm, 2, '.', '')
             ]);
 
             fclose($handle);

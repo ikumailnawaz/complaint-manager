@@ -156,7 +156,7 @@ class WorkshopController extends Controller
         $user = Auth::user();
 
         // Allowed for assigned workshop engineer OR superior
-        if ($user->isEngineer() && $ticket->assigned_engineer_id !== $user->id) {
+        if ($user->isEngineer() && !$ticket->hasEngineer($user)) {
             abort(403, 'Only the assigned workshop engineer can mark bench repair complete.');
         }
 

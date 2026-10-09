@@ -199,6 +199,10 @@ class ReportController extends Controller
         if ($activeTab === 'bank_tickets' || $selectedBank) {
             $bankAuditQuery = Ticket::with([
                 'assignedEngineer',
+                'activeTicketEngineers.engineer',
+                'cycles.openedBy',
+                'cycles.resolvedBy',
+                'cycles.closedBy',
                 'feedbacks.submittedBy',
                 'logs.user',
                 'partRequests.items.part',
@@ -242,6 +246,7 @@ class ReportController extends Controller
             $sumDeducted = 0;
             $sumNet = 0;
             $inTat = 0;
+            $reopenedCount = 0;
 
             foreach ($allBankItems as $item) {
                 $m = $item->calculateAuditTrailMetrics();
@@ -251,10 +256,14 @@ class ReportController extends Controller
                 if ($m['is_in_tat']) {
                     $inTat++;
                 }
+                if ($item->reopen_count > 0 || ($item->current_cycle_no && $item->current_cycle_no > 1)) {
+                    $reopenedCount++;
+                }
             }
 
             $bankAuditSummary = [
                 'total' => $totalAudit,
+                'reopened_count' => $reopenedCount,
                 'avg_gross_hours' => $totalAudit > 0 ? round($sumGross / $totalAudit, 1) : 0.0,
                 'avg_deducted_hours' => $totalAudit > 0 ? round($sumDeducted / $totalAudit, 1) : 0.0,
                 'avg_net_hours' => $totalAudit > 0 ? round($sumNet / $totalAudit, 1) : 0.0,
@@ -267,6 +276,7 @@ class ReportController extends Controller
         } else {
             $bankAuditSummary = [
                 'total' => 0,
+                'reopened_count' => 0,
                 'avg_gross_hours' => 0.0,
                 'avg_deducted_hours' => 0.0,
                 'avg_net_hours' => 0.0,
@@ -468,6 +478,12 @@ class ReportController extends Controller
                     'Machine Serial No',
                     'Urgency',
                     'Status',
+                    'Reopen Count',
+                    'Current Tour',
+                    'Aligned Engineers',
+                    'Latest Reopen At',
+                    'Latest Reopen Reason',
+                    'Latest Re-Closed At',
                     'Email Received (Logged At)',
                     'Reply / Assignment Sent At',
                     'Reply TAT (Mins)',
@@ -498,7 +514,14 @@ class ReportController extends Controller
                     'Feedback Day 5',
                 ]);
 
-                $bankQuery = Ticket::with(['feedbacks.submittedBy']);
+                $bankQuery = Ticket::with([
+                    'feedbacks.submittedBy',
+                    'assignedEngineer',
+                    'activeTicketEngineers.engineer',
+                    'cycles.openedBy',
+                    'cycles.resolvedBy',
+                    'cycles.closedBy',
+                ]);
                 if ($request->filled('bank_filter')) {
                     $bankQuery->where('bank_name', $request->bank_filter);
                 }
@@ -510,6 +533,24 @@ class ReportController extends Controller
 
                     $replyTat = ($t->email_assignment_sent_at && $t->created_at)
                         ? $t->created_at->diffInMinutes($t->email_assignment_sent_at)
+                        : 'N/A';
+
+                    $alignedEngineers = $t->activeTicketEngineers->map(function ($ate) {
+                        return ($ate->engineer?->name ?? 'Unknown') . ($ate->isLead() ? ' [Lead]' : ' [Support]');
+                    })->implode(', ');
+                    if (empty($alignedEngineers)) {
+                        $alignedEngineers = $t->assignedEngineer?->name ?? 'Unassigned';
+                    }
+
+                    $latestCycle = $t->cycles->last();
+                    $latestReopenAt = ($t->reopen_count > 0 && $latestCycle && $latestCycle->cycle_no > 1 && $latestCycle->opened_at)
+                        ? $latestCycle->opened_at->format('Y-m-d H:i')
+                        : 'N/A';
+                    $latestReopenReason = ($t->reopen_count > 0 && $latestCycle && $latestCycle->cycle_no > 1)
+                        ? ($latestCycle->reopen_reason ?? 'Recurred issue reported by bank')
+                        : 'N/A';
+                    $latestReclosedAt = ($t->reopen_count > 0 && $latestCycle && $latestCycle->cycle_no > 1 && ($latestCycle->closed_at ?? $latestCycle->resolved_at))
+                        ? Carbon::parse($latestCycle->closed_at ?? $latestCycle->resolved_at)->format('Y-m-d H:i')
                         : 'N/A';
 
                     // Collect and format all daily progress updates until resolved
@@ -534,6 +575,12 @@ class ReportController extends Controller
                         $t->machine_serial_no ?? 'N/A',
                         strtoupper($t->urgency ?? 'NORMAL'),
                         strtoupper(str_replace('_', ' ', $t->status)),
+                        $t->reopen_count ?? 0,
+                        'Tour ' . ($t->current_cycle_no ?? 1),
+                        $alignedEngineers,
+                        $latestReopenAt,
+                        $latestReopenReason,
+                        $latestReclosedAt,
                         $t->created_at->format('Y-m-d H:i'),
                         $t->email_assignment_sent_at ? $t->email_assignment_sent_at->format('Y-m-d H:i') : 'N/A',
                         $replyTat,
@@ -700,14 +747,16 @@ class ReportController extends Controller
                     'Serial No',
                     'Urgency',
                     'Status',
-                    'Assigned Engineer',
+                    'Reopen Count',
+                    'Current Tour',
+                    'Assigned Engineer(s)',
                     'Logged At',
                     'SLA Deadline',
                     'Resolved At',
                     'SLA Compliant',
                 ]);
 
-                $tickets = Ticket::with(['assignedEngineer']);
+                $tickets = Ticket::with(['assignedEngineer', 'activeTicketEngineers.engineer']);
                 if ($fromDate) $tickets->whereDate('created_at', '>=', $fromDate);
                 if ($toDate) $tickets->whereDate('created_at', '<=', $toDate);
 
@@ -722,6 +771,13 @@ class ReportController extends Controller
                         $compliant = ($t->sla_deadline && $t->sla_deadline < now()) ? 'BREACHED (ACTIVE)' : 'IN PROGRESS';
                     }
 
+                    $engineers = $t->activeTicketEngineers->map(function ($ate) {
+                        return ($ate->engineer?->name ?? 'Unknown') . ($ate->isLead() ? ' [Lead]' : ' [Support]');
+                    })->implode(', ');
+                    if (empty($engineers)) {
+                        $engineers = $t->assignedEngineer?->name ?? 'Unassigned';
+                    }
+
                     fputcsv($output, [
                         $t->ticket_no,
                         $t->bank_name,
@@ -731,7 +787,9 @@ class ReportController extends Controller
                         $t->machine_serial_no ?? 'N/A',
                         strtoupper($t->urgency ?? 'NORMAL'),
                         strtoupper(str_replace('_', ' ', $t->status)),
-                        $t->assignedEngineer?->name ?? 'Unassigned',
+                        $t->reopen_count ?? 0,
+                        'Tour ' . ($t->current_cycle_no ?? 1),
+                        $engineers,
                         $t->created_at->format('Y-m-d H:i'),
                         $t->sla_deadline ? $t->sla_deadline->format('Y-m-d H:i') : 'N/A',
                         $resolvedAt ? Carbon::parse($resolvedAt)->format('Y-m-d H:i') : 'N/A',
@@ -765,7 +823,14 @@ class ReportController extends Controller
         $toDate = $dateFilter['to_date'] ? Carbon::parse($dateFilter['to_date']) : null;
 
         if ($type === 'bank_tickets') {
-            $bankQuery = Ticket::with(['feedbacks.submittedBy', 'assignedEngineer']);
+            $bankQuery = Ticket::with([
+                'feedbacks.submittedBy',
+                'assignedEngineer',
+                'activeTicketEngineers.engineer',
+                'cycles.openedBy',
+                'cycles.resolvedBy',
+                'cycles.closedBy',
+            ]);
             if ($request->filled('bank_filter')) {
                 $bankQuery->where('bank_name', $request->bank_filter);
             }

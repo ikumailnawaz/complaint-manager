@@ -13,6 +13,54 @@ class Ticket extends Model
 {
     use HasFactory;
 
+    protected static function booted(): void
+    {
+        static::created(function (Ticket $ticket) {
+            TicketCycle::firstOrCreate(
+                ['ticket_id' => $ticket->id, 'cycle_no' => 1],
+                [
+                    'status' => 'open',
+                    'opened_at' => $ticket->created_at ?? now(),
+                    'sla_deadline' => $ticket->sla_deadline,
+                ]
+            );
+        });
+
+        static::saved(function (Ticket $ticket) {
+            if (!$ticket->wasChanged('assigned_engineer_id') || !$ticket->assigned_engineer_id) {
+                return;
+            }
+
+            $leadId = (int) $ticket->assigned_engineer_id;
+
+            TicketEngineer::where('ticket_id', $ticket->id)
+                ->whereNull('released_at')
+                ->where('role', 'lead')
+                ->where('engineer_id', '!=', $leadId)
+                ->update(['released_at' => now()]);
+
+            $row = TicketEngineer::where('ticket_id', $ticket->id)
+                ->whereNull('released_at')
+                ->where('engineer_id', $leadId)
+                ->first();
+
+            if ($row) {
+                if ($row->role !== 'lead') {
+                    $row->update(['role' => 'lead']);
+                }
+            } else {
+                TicketEngineer::create([
+                    'ticket_id' => $ticket->id,
+                    'engineer_id' => $leadId,
+                    'role' => 'lead',
+                    'assigned_by_id' => $ticket->assigned_by_id,
+                    'assigned_at' => now(),
+                    'cycle_id' => TicketCycle::where('ticket_id', $ticket->id)->orderByDesc('cycle_no')->value('id'),
+                ]);
+            }
+        });
+    }
+
     protected $fillable = [
         'ticket_no',
         'ticket_no_source',
@@ -93,6 +141,8 @@ class Ticket extends Model
         'approval_arrived_at',
         'approval_arrived_by_id',
         'approval_arrived_remarks',
+        'current_cycle_no',
+        'reopen_count',
     ];
 
     protected $casts = [
@@ -285,6 +335,128 @@ class Ticket extends Model
     public function feedbacks(): HasMany
     {
         return $this->hasMany(TicketFeedback::class)->orderBy('day_number', 'asc');
+    }
+
+    // ---- Multi-engineer alignment ------------------------------------------------
+
+    public function ticketEngineers(): HasMany
+    {
+        return $this->hasMany(TicketEngineer::class);
+    }
+
+    public function activeTicketEngineers(): HasMany
+    {
+        return $this->hasMany(TicketEngineer::class)->whereNull('released_at');
+    }
+
+    /** All engineers currently aligned (lead + support). */
+    public function activeEngineers()
+    {
+        return User::whereIn(
+            'id',
+            $this->activeTicketEngineers()->pluck('engineer_id')
+        )->get();
+    }
+
+    public function activeEngineerIds(): array
+    {
+        $ids = $this->activeTicketEngineers()->pluck('engineer_id')->all();
+        if ($this->assigned_engineer_id) {
+            $ids[] = $this->assigned_engineer_id;
+        }
+        return array_values(array_unique(array_map('intval', $ids)));
+    }
+
+    /** True if the user is the lead or an active support engineer on this ticket. */
+    public function hasEngineer($user): bool
+    {
+        $id = is_object($user) ? $user->id : (int) $user;
+        return in_array((int) $id, $this->activeEngineerIds(), true);
+    }
+
+    public function isLeadEngineer($user): bool
+    {
+        $id = is_object($user) ? $user->id : (int) $user;
+        return (int) $this->assigned_engineer_id === (int) $id;
+    }
+
+    /** Tickets visible to an engineer: lead, support, or legacy assigned id. */
+    public function scopeForEngineer($query, int $engineerId)
+    {
+        return $query->where(function ($q) use ($engineerId) {
+            $q->where('assigned_engineer_id', $engineerId)
+              ->orWhereHas('activeTicketEngineers', fn ($e) => $e->where('engineer_id', $engineerId));
+        });
+    }
+
+    // ---- Reopen cycles -----------------------------------------------------------
+
+    public function cycles(): HasMany
+    {
+        return $this->hasMany(TicketCycle::class)->orderBy('cycle_no');
+    }
+
+    public function currentCycle(): ?TicketCycle
+    {
+        return $this->cycles()->where('cycle_no', $this->current_cycle_no ?: 1)->first();
+    }
+
+    public function documents(): HasMany
+    {
+        return $this->hasMany(TicketDocument::class)->orderBy('uploaded_at');
+    }
+
+    public const REOPEN_WINDOW_DAYS = 15;
+
+    public function resolutionOrCloseDate(): ?Carbon
+    {
+        if ($this->closed_at) {
+            return Carbon::parse($this->closed_at);
+        }
+        if ($this->resolved_at) {
+            return Carbon::parse($this->resolved_at);
+        }
+        if (in_array($this->status, ['resolved', 'closed'], true) && $this->updated_at) {
+            return Carbon::parse($this->updated_at);
+        }
+        return null;
+    }
+
+    public function isReopenWindowExpired(): bool
+    {
+        $resolvedDate = $this->resolutionOrCloseDate();
+        if (!$resolvedDate) {
+            return false;
+        }
+        return $resolvedDate->diffInDays(now()) > self::REOPEN_WINDOW_DAYS;
+    }
+
+    public function reopenDaysRemaining(): int
+    {
+        $resolvedDate = $this->resolutionOrCloseDate();
+        if (!$resolvedDate) {
+            return self::REOPEN_WINDOW_DAYS;
+        }
+        $expiry = $resolvedDate->copy()->addDays(self::REOPEN_WINDOW_DAYS);
+        if (now() >= $expiry) {
+            return 0;
+        }
+        return max(0, (int) ceil(now()->diffInHours($expiry, false) / 24));
+    }
+
+    public function canBeReopened(): bool
+    {
+        if (!in_array($this->status, ['resolved', 'closed'], true)) {
+            return false;
+        }
+        return !$this->isReopenWindowExpired();
+    }
+
+    /** Claims belonging to the current tour only; earlier tours stay visible via expenseClaims(). */
+    public function currentCycleClaims(): HasMany
+    {
+        return $this->hasMany(ExpenseClaim::class)
+            ->where('cycle_id', TicketCycle::where('ticket_id', $this->id)->orderByDesc('cycle_no')->value('id'));
     }
 
     public function expenseClaims(): HasMany
@@ -773,25 +945,52 @@ class Ticket extends Model
         $maxFeedbackDay = $this->feedbacks->max('day_number') ?? 0;
         $totalDays = max($calendarDays, (int) $maxFeedbackDay);
 
-        $feedbacksByDay = $this->feedbacks->keyBy('day_number');
+        // Several engineers can report on the same day: keep all of them.
+        $feedbacksByDay = $this->feedbacks->groupBy('day_number');
+
+        // After a reopen, only days inside an open tour count (days while closed are not "missing").
+        $windows = null;
+        if ((int) $this->reopen_count > 0) {
+            $windows = $this->cycles()->get()->map(function ($c) {
+                $from = ($c->opened_at ?? Carbon::now())->copy()->startOfDay();
+                $to = ($c->resolved_at ?? $c->closed_at ?? Carbon::now())->copy()->startOfDay();
+                return [$from, $to];
+            });
+        }
 
         $matrix = [];
         for ($day = 1; $day <= $totalDays; $day++) {
-            $fb = $feedbacksByDay->get($day);
+            $dayFeedbacks = $feedbacksByDay->get($day, collect());
             $dayDate = $start->copy()->addDays($day - 1);
 
-            if ($fb) {
+            if ($dayFeedbacks->isEmpty() && $windows !== null) {
+                $inTour = $windows->contains(fn ($w) => $dayDate->between($w[0], $w[1]));
+                if (!$inTour) {
+                    continue;
+                }
+            }
+
+            if ($dayFeedbacks->isNotEmpty()) {
+                $fb = $dayFeedbacks->sortByDesc(fn ($f) => $f->submitted_at ?? $f->created_at)->first();
+                $multi = $dayFeedbacks->count() > 1;
+                $nameOf = fn ($f) => $f->submittedBy?->name ?? $f->engineer?->name ?? $this->assignedEngineer?->name ?? 'Assigned Engineer';
+
                 $matrix[] = [
                     'day_number' => $day,
                     'is_logged' => true,
                     'status' => 'logged',
                     'date_estimated' => $dayDate,
                     'feedback' => $fb,
-                    'feedback_text' => $fb->feedback_text,
-                    'action_taken' => $fb->action_taken,
+                    'feedback_text' => $multi
+                        ? $dayFeedbacks->map(fn ($f) => '[' . $nameOf($f) . '] ' . $f->feedback_text)->implode("\n")
+                        : $fb->feedback_text,
+                    'action_taken' => $multi
+                        ? $dayFeedbacks->map(fn ($f) => '[' . $nameOf($f) . '] ' . $f->action_taken)->implode(' | ')
+                        : $fb->action_taken,
                     'parts_required' => $fb->parts_required,
                     'submitted_at' => $fb->submitted_at ?? $fb->created_at,
-                    'engineer_name' => $fb->submittedBy?->name ?? $fb->engineer?->name ?? $this->assignedEngineer?->name ?? 'Assigned Engineer',
+                    'engineer_name' => $dayFeedbacks->map($nameOf)->unique()->implode(', '),
+                    'tour_no' => (int) ($fb->cycle_id ? TicketCycle::where('id', $fb->cycle_id)->value('cycle_no') : 1),
                 ];
             } else {
                 $matrix[] = [
@@ -805,6 +1004,7 @@ class Ticket extends Model
                     'parts_required' => null,
                     'submitted_at' => null,
                     'engineer_name' => 'N/A',
+                    'tour_no' => null,
                 ];
             }
         }
@@ -867,7 +1067,7 @@ class Ticket extends Model
 
     public function hasClaimedExpenses(): bool
     {
-        return $this->expenseClaims()->exists();
+        return $this->currentCycleClaims()->exists();
     }
 
     public function isResolutionLocked(): bool
@@ -877,15 +1077,16 @@ class Ticket extends Model
 
     public function activeExpenseClaim(): ?ExpenseClaim
     {
-        return $this->expenseClaims()
+        return $this->currentCycleClaims()
             ->whereIn('status', ['submitted', 'approved', 'paid'])
             ->latest()
             ->first();
     }
 
-    public function hasActiveExpenseClaim(): bool
+    public function hasActiveExpenseClaim(?int $engineerId = null): bool
     {
-        return $this->expenseClaims()
+        return $this->currentCycleClaims()
+            ->when($engineerId, fn ($q) => $q->where('engineer_id', $engineerId))
             ->whereIn('status', ['submitted', 'approved', 'paid'])
             ->exists();
     }
@@ -901,7 +1102,7 @@ class Ticket extends Model
     {
         $userId = $userId ?? auth()->id();
 
-        if ($this->hasActiveExpenseClaim()) {
+        if ($this->hasActiveExpenseClaim($userId)) {
             return false;
         }
 

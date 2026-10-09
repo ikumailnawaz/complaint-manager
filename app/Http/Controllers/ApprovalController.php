@@ -69,7 +69,7 @@ class ApprovalController extends Controller
         $user = Auth::user();
 
         // Check permission: assigned engineer or manager
-        if ($user->isEngineer() && $ticket->assigned_engineer_id !== $user->id) {
+        if ($user->isEngineer() && !$ticket->hasEngineer($user)) {
             abort(403, 'You are not assigned to this ticket.');
         }
 

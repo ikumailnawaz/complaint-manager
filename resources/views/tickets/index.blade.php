@@ -284,6 +284,24 @@
                                                 </button>
                                             @endif
                                             @if($t->status === 'resolved' || $t->status === 'closed')
+                                                @if(auth()->user()->canReopenTickets())
+                                                    @if($t->canBeReopened())
+                                                        <button type="button" 
+                                                                onclick="openIndexReopenModal({{ $t->id }}, '{{ $t->ticket_no }}', '{{ addslashes($t->bank_name) }}', {{ ((int)$t->current_cycle_no ?: 1) + 1 }}, {{ $t->reopenDaysRemaining() }}, {{ $t->assigned_engineer_id ?? 'null' }}, {{ json_encode($t->activeTicketEngineers->where('role', 'support')->pluck('engineer_id')->values()->all()) }})"
+                                                                class="w-full text-left flex items-center justify-between px-3 py-2 text-xs text-rose-700 hover:bg-rose-50 font-bold transition cursor-pointer">
+                                                            <div class="flex items-center space-x-2">
+                                                                <i class="fa-solid fa-rotate-left text-rose-600 w-4"></i>
+                                                                <span>Reopen Ticket (Tour {{ ((int)$t->current_cycle_no ?: 1) + 1 }})</span>
+                                                            </div>
+                                                            <span class="text-[10px] font-normal text-rose-500">({{ $t->reopenDaysRemaining() }}d left)</span>
+                                                        </button>
+                                                    @elseif($t->isReopenWindowExpired())
+                                                        <div class="flex items-center space-x-2 px-3 py-2 text-xs text-slate-400 font-semibold cursor-not-allowed" title="Reopen window expired (> 15 days)">
+                                                            <i class="fa-solid fa-lock text-slate-400 w-4"></i>
+                                                            <span>Reopen Expired (&gt; 15d)</span>
+                                                        </div>
+                                                    @endif
+                                                @endif
                                                 @if(!$isEngineer && $t->canSendResolutionEmail())
                                                     <button type="button" 
                                                             onclick="openResolutionEmailModal({{ $t->id }}, '{{ $t->ticket_no }}', '{{ addslashes($t->bank_name) }}', '{{ addslashes($t->customer_email ?? '') }}', '{{ addslashes($t->customer_cc ?? '') }}', '{{ $t->hasSupportingDocument() ? $t->supportingDocumentUrl() : '' }}', '{{ $t->resolution_document_name ?? ($t->supporting_document ? basename($t->supporting_document) : '') }}')"
@@ -588,6 +606,7 @@ document.addEventListener('click', function(e) {
 @include('tickets.partials.approval-modals')
 @if(!$isEngineer)
     @include('tickets.partials.send-resolution-email-modal')
+    @include('tickets.partials.index-reopen-modal')
 @endif
 @endsection
 

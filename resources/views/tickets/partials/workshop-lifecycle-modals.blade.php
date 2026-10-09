@@ -1,5 +1,5 @@
 <!-- MODAL 1: PHYSICAL WORKSHOP INTAKE -->
-<div id="workshopReceiveModal" class="hidden fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+<div id="workshopReceiveModal" style="display: none;" class="hidden fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
     <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full border border-slate-200 overflow-hidden">
         <div class="bg-purple-700 px-6 py-4 text-white flex items-center justify-between">
             <div class="flex items-center space-x-3">
@@ -57,7 +57,7 @@
 </div>
 
 <!-- MODAL 2: BENCH REPAIR COMPLETE -->
-<div id="workshopResolveModal" class="hidden fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+<div id="workshopResolveModal" style="display: none;" class="hidden fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
     <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full border border-slate-200 overflow-hidden">
         <div class="bg-emerald-700 px-6 py-4 text-white flex items-center justify-between">
             <div class="flex items-center space-x-3">
@@ -97,7 +97,7 @@
 </div>
 
 <!-- MODAL 3: DISPATCH RETURN TO BANK -->
-<div id="workshopReturnModal" class="hidden fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+<div id="workshopReturnModal" style="display: none;" class="hidden fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
     <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full border border-slate-200 overflow-hidden">
         <div class="bg-indigo-700 px-6 py-4 text-white flex items-center justify-between">
             <div class="flex items-center space-x-3">
@@ -153,7 +153,7 @@
 </div>
 
 <!-- MODAL 4: CONFIRM BANK RECEIPT & CLOSE -->
-<div id="workshopCloseModal" class="hidden fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+<div id="workshopCloseModal" style="display: none;" class="hidden fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
     <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full border border-slate-200 overflow-hidden">
         <div class="bg-emerald-700 px-6 py-4 text-white flex items-center justify-between">
             <div class="flex items-center space-x-3">
@@ -195,12 +195,18 @@ function openWorkshopReceiveModal(ticketId, ticketNo, bankName, location) {
     const badge = document.getElementById('receiveModalTicketBadge');
     if (badge) badge.innerText = '#' + ticketNo + ' • ' + (bankName || 'Bank');
     const modal = document.getElementById('workshopReceiveModal');
-    if (modal) modal.classList.remove('hidden');
+    if (modal) {
+        modal.style.display = 'flex';
+        modal.classList.remove('hidden');
+    }
 }
 
 function closeWorkshopReceiveModal() {
     const modal = document.getElementById('workshopReceiveModal');
-    if (modal) modal.classList.add('hidden');
+    if (modal) {
+        modal.style.display = 'none';
+        modal.classList.add('hidden');
+    }
 }
 
 function openWorkshopResolveModal(ticketId, ticketNo, bankName) {
@@ -209,12 +215,18 @@ function openWorkshopResolveModal(ticketId, ticketNo, bankName) {
     const badge = document.getElementById('resolveModalTicketBadge');
     if (badge) badge.innerText = '#' + ticketNo + ' • ' + (bankName || 'Bank');
     const modal = document.getElementById('workshopResolveModal');
-    if (modal) modal.classList.remove('hidden');
+    if (modal) {
+        modal.style.display = 'flex';
+        modal.classList.remove('hidden');
+    }
 }
 
 function closeWorkshopResolveModal() {
     const modal = document.getElementById('workshopResolveModal');
-    if (modal) modal.classList.add('hidden');
+    if (modal) {
+        modal.style.display = 'none';
+        modal.classList.add('hidden');
+    }
 }
 
 function openWorkshopReturnModal(ticketId, ticketNo, bankName) {
@@ -223,12 +235,18 @@ function openWorkshopReturnModal(ticketId, ticketNo, bankName) {
     const badge = document.getElementById('returnModalTicketBadge');
     if (badge) badge.innerText = '#' + ticketNo + ' • ' + (bankName || 'Bank');
     const modal = document.getElementById('workshopReturnModal');
-    if (modal) modal.classList.remove('hidden');
+    if (modal) {
+        modal.style.display = 'flex';
+        modal.classList.remove('hidden');
+    }
 }
 
 function closeWorkshopReturnModal() {
     const modal = document.getElementById('workshopReturnModal');
-    if (modal) modal.classList.add('hidden');
+    if (modal) {
+        modal.style.display = 'none';
+        modal.classList.add('hidden');
+    }
 }
 
 function openWorkshopCloseModal(ticketId, ticketNo, bankName) {
@@ -237,11 +255,17 @@ function openWorkshopCloseModal(ticketId, ticketNo, bankName) {
     const badge = document.getElementById('closeModalTicketBadge');
     if (badge) badge.innerText = '#' + ticketNo + ' • ' + (bankName || 'Bank');
     const modal = document.getElementById('workshopCloseModal');
-    if (modal) modal.classList.remove('hidden');
+    if (modal) {
+        modal.style.display = 'flex';
+        modal.classList.remove('hidden');
+    }
 }
 
 function closeWorkshopCloseModal() {
     const modal = document.getElementById('workshopCloseModal');
-    if (modal) modal.classList.add('hidden');
+    if (modal) {
+        modal.style.display = 'none';
+        modal.classList.add('hidden');
+    }
 }
 </script>

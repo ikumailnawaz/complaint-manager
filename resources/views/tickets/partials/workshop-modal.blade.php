@@ -1,5 +1,5 @@
 <!-- Send Ticket to Central Workshop Modal -->
-<div id="workshopTransferModal" class="hidden fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+<div id="workshopTransferModal" style="display: none;" class="hidden fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
     <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full border border-slate-200 overflow-hidden transform transition-all">
         <!-- Modal Header -->
         <div class="bg-purple-700 px-6 py-4 text-white flex items-center justify-between">
@@ -110,6 +110,7 @@ function openWorkshopModal(ticketId, ticketNo, bankName, currentLocation) {
     
     const modal = document.getElementById('workshopTransferModal');
     if (modal) {
+        modal.style.display = 'flex';
         modal.classList.remove('hidden');
         document.body.style.overflow = 'hidden';
     }
@@ -118,6 +119,7 @@ function openWorkshopModal(ticketId, ticketNo, bankName, currentLocation) {
 function closeWorkshopModal() {
     const modal = document.getElementById('workshopTransferModal');
     if (modal) {
+        modal.style.display = 'none';
         modal.classList.add('hidden');
         document.body.style.overflow = '';
     }

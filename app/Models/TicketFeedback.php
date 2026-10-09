@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class TicketFeedback extends Model
 {
     use HasFactory;
+    use \App\Models\Concerns\TagsTicketCycle;
 
     protected $table = 'ticket_feedbacks';
 
@@ -25,6 +26,7 @@ class TicketFeedback extends Model
         'status',
         'due_at',
         'submitted_at',
+        'cycle_id',
     ];
 
     protected $casts = [

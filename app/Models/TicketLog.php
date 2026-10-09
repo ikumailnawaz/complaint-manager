@@ -9,12 +9,14 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class TicketLog extends Model
 {
     use HasFactory;
+    use \App\Models\Concerns\TagsTicketCycle;
 
     protected $fillable = [
         'ticket_id',
         'user_id',
         'action',
         'notes',
+        'cycle_id',
     ];
 
     public function ticket(): BelongsTo

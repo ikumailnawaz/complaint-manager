@@ -77,15 +77,15 @@ class EngineerController extends Controller
     {
         abort_unless($engineer->isEngineer(), 404);
 
-        $tickets = Ticket::where('assigned_engineer_id', $engineer->id)->latest()->paginate(10);
+        $tickets = Ticket::forEngineer($engineer->id)->latest()->paginate(10);
 
         $expenses = ExpenseClaim::where('engineer_id', $engineer->id)->latest()->take(10)->get();
 
         $metrics = [
-            'total_assigned' => Ticket::where('assigned_engineer_id', $engineer->id)->count(),
-            'resolved' => Ticket::where('assigned_engineer_id', $engineer->id)->whereIn('status', ['resolved', 'closed'])->count(),
-            'active' => Ticket::where('assigned_engineer_id', $engineer->id)->whereIn('status', ['assigned', 'in_progress', 'awaiting_workshop'])->count(),
-            'escalated' => Ticket::where('assigned_engineer_id', $engineer->id)->where('status', 'escalated')->count(),
+            'total_assigned' => Ticket::forEngineer($engineer->id)->count(),
+            'resolved' => Ticket::forEngineer($engineer->id)->whereIn('status', ['resolved', 'closed'])->count(),
+            'active' => Ticket::forEngineer($engineer->id)->whereIn('status', ['assigned', 'in_progress', 'awaiting_workshop'])->count(),
+            'escalated' => Ticket::forEngineer($engineer->id)->where('status', 'escalated')->count(),
             'total_claimed' => ExpenseClaim::where('engineer_id', $engineer->id)->sum('claimed_amount'),
             'total_paid' => ExpenseClaim::where('engineer_id', $engineer->id)->where('status', 'paid')->sum('claimed_amount'),
             'sla_compliance' => $this->calculateSlaCompliance($engineer->id),
@@ -106,10 +106,10 @@ class EngineerController extends Controller
 
     private function calculateSlaCompliance(int $engineerId): int
     {
-        $total = Ticket::where('assigned_engineer_id', $engineerId)->count();
+        $total = Ticket::forEngineer($engineerId)->count();
         if ($total === 0) return 100;
 
-        $escalated = Ticket::where('assigned_engineer_id', $engineerId)->where('status', 'escalated')->count();
+        $escalated = Ticket::forEngineer($engineerId)->where('status', 'escalated')->count();
         $compliance = round((($total - $escalated) / $total) * 100);
 
         return max(0, min(100, (int)$compliance));

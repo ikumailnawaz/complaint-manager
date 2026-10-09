@@ -86,7 +86,7 @@ class DashboardController extends Controller
     private function engineerDashboard(User $engineer)
     {
         $myTickets = Ticket::where(function ($q) use ($engineer) {
-                $q->where('assigned_engineer_id', $engineer->id)
+                $q->forEngineer($engineer->id)
                   ->orWhere('original_field_engineer_id', $engineer->id);
             })
             ->whereNotIn('status', ['resolved', 'closed'])
@@ -96,7 +96,7 @@ class DashboardController extends Controller
         $stats = [
             'active_tickets' => $myTickets->whereIn('status', ['assigned', 'in_progress', 'awaiting_approval', 'awaiting_workshop', 'in_workshop_repair', 'workshop_repaired', 'return_transit', 'escalated'])->count(),
             'resolved_tickets' => Ticket::where(function ($q) use ($engineer) {
-                $q->where('assigned_engineer_id', $engineer->id)
+                $q->forEngineer($engineer->id)
                   ->orWhere('original_field_engineer_id', $engineer->id);
             })->whereIn('status', ['resolved', 'closed'])->count(),
             'pending_expenses' => ExpenseClaim::where('engineer_id', $engineer->id)->where('status', 'submitted')->count(),

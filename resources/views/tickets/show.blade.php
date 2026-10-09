@@ -624,7 +624,7 @@
                         </a>
                         @if(auth()->user()->isSuperior() || (auth()->user()->isEngineer() && $ticket->assigned_engineer_id === auth()->id()))
                         <span class="text-slate-300">&bull;</span>
-                        <button type="button" onclick="document.getElementById('replaceDocModal').classList.remove('hidden')" class="text-[11px] text-amber-700 hover:underline font-bold cursor-pointer">
+                        <button type="button" onclick="const m=document.getElementById('replaceDocModal');if(m){m.style.display='flex';m.classList.remove('hidden');}" class="text-[11px] text-amber-700 hover:underline font-bold cursor-pointer">
                             <i class="fa-solid fa-arrows-rotate mr-0.5"></i> Replace
                         </button>
                         @endif
@@ -632,48 +632,111 @@
                 </div>
 
                 <div class="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
-                    @if($ticket->isSupportingDocumentImage())
-                        <div class="relative group rounded-lg overflow-hidden border border-slate-200 bg-white">
-                            <a href="{{ route('tickets.document', $ticket) }}" target="_blank" class="block">
-                                <img src="{{ route('tickets.document', $ticket) }}" alt="Proof of Work" class="w-full max-h-56 object-contain rounded-lg hover:opacity-95 transition bg-slate-100">
-                                <div class="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center text-white text-xs font-bold gap-1.5">
-                                    <i class="fa-solid fa-magnifying-glass-plus text-base"></i>
-                                    <span>Click to view full photo</span>
+                    @php
+                        $allDocs = $ticket->documents()->with('cycle', 'uploadedBy')->latest('uploaded_at')->get();
+                    @endphp
+
+                    @if($allDocs->isNotEmpty())
+                        <div class="space-y-2.5">
+                            @foreach($allDocs as $doc)
+                                @php
+                                    $isImg = in_array(strtolower(pathinfo($doc->path, PATHINFO_EXTENSION)), ['jpg', 'jpeg', 'png', 'webp', 'gif']);
+                                    $tourNo = $doc->cycle?->cycle_no ?? 1;
+                                @endphp
+                                <div class="p-2.5 bg-white rounded-lg border border-slate-200 space-y-1.5 shadow-2xs">
+                                    <div class="flex items-center justify-between text-[11px]">
+                                        <div class="flex items-center space-x-1.5">
+                                            <span class="px-1.5 py-0.5 rounded text-[10px] font-black {{ $tourNo > 1 ? 'bg-purple-100 text-purple-800 border border-purple-200' : 'bg-slate-100 text-slate-700' }}">
+                                                Tour {{ $tourNo }}
+                                            </span>
+                                            <span class="font-bold text-slate-800 truncate max-w-[200px]" title="{{ $doc->name ?? basename($doc->path) }}">
+                                                {{ $doc->name ?? basename($doc->path) }}
+                                            </span>
+                                        </div>
+                                        <div class="flex items-center space-x-1">
+                                            <a href="{{ asset('storage/' . $doc->path) }}" target="_blank" class="px-2 py-0.5 bg-sky-50 hover:bg-sky-100 text-sky-700 font-bold rounded text-[10px] transition flex items-center gap-1" title="Open in new tab">
+                                                <i class="fa-solid fa-arrow-up-right-from-square text-[9px]"></i> View
+                                            </a>
+                                            <a href="{{ route('tickets.download-specific-document', $doc) }}" class="px-2 py-0.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold rounded text-[10px] transition flex items-center gap-1" title="Download file to computer">
+                                                <i class="fa-solid fa-download text-[9px]"></i> Download
+                                            </a>
+                                        </div>
+                                    </div>
+                                    @if($isImg)
+                                        <div class="relative group rounded overflow-hidden border border-slate-100 bg-slate-50">
+                                            <a href="{{ asset('storage/' . $doc->path) }}" target="_blank" class="block">
+                                                <img src="{{ asset('storage/' . $doc->path) }}" alt="Proof" class="w-full max-h-36 object-contain rounded hover:opacity-95 transition bg-slate-100">
+                                            </a>
+                                        </div>
+                                    @endif
+                                    <div class="text-[10px] text-slate-400 flex items-center justify-between">
+                                        <span>Uploaded: {{ $doc->uploaded_at?->format('d M, h:i A') }}</span>
+                                        @if($doc->uploadedBy)
+                                            <span>by {{ $doc->uploadedBy->name }}</span>
+                                        @endif
+                                    </div>
                                 </div>
-                            </a>
+                            @endforeach
                         </div>
                     @else
-                        <div class="flex items-center space-x-3 p-3 bg-white rounded-lg border border-slate-200">
-                            <div class="w-10 h-10 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center text-xl shrink-0">
-                                <i class="fa-solid fa-file-pdf"></i>
+                        @if($ticket->isSupportingDocumentImage())
+                            <div class="relative group rounded-lg overflow-hidden border border-slate-200 bg-white">
+                                <a href="{{ route('tickets.document', $ticket) }}" target="_blank" class="block">
+                                    <img src="{{ route('tickets.document', $ticket) }}" alt="Proof of Work" class="w-full max-h-56 object-contain rounded-lg hover:opacity-95 transition bg-slate-100">
+                                    <div class="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center text-white text-xs font-bold gap-1.5">
+                                        <i class="fa-solid fa-magnifying-glass-plus text-base"></i>
+                                        <span>Click to view full photo</span>
+                                    </div>
+                                </a>
                             </div>
-                            <div class="overflow-hidden flex-1">
-                                <div class="font-bold text-xs text-slate-800 truncate">{{ $ticket->resolution_document_name ?? basename($ticket->supporting_document) }}</div>
-                                <div class="text-[10px] text-slate-400">PDF Document Attachment</div>
+                        @else
+                            <div class="flex items-center space-x-3 p-3 bg-white rounded-lg border border-slate-200">
+                                <div class="w-10 h-10 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center text-xl shrink-0">
+                                    <i class="fa-solid fa-file-pdf"></i>
+                                </div>
+                                <div class="overflow-hidden flex-1">
+                                    <div class="font-bold text-xs text-slate-800 truncate">{{ $ticket->resolution_document_name ?? basename($ticket->supporting_document) }}</div>
+                                    <div class="text-[10px] text-slate-400">PDF Document Attachment</div>
+                                </div>
+                                <div class="flex items-center space-x-1.5">
+                                    <a href="{{ route('tickets.document', $ticket) }}" target="_blank" class="px-2.5 py-1 bg-sky-50 hover:bg-sky-100 text-sky-700 font-bold rounded-lg text-xs transition flex items-center gap-1">
+                                        <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i> View
+                                    </a>
+                                    <a href="{{ route('tickets.download-document', $ticket) }}" class="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold rounded-lg text-xs transition flex items-center gap-1">
+                                        <i class="fa-solid fa-download text-[10px]"></i> Download
+                                    </a>
+                                </div>
                             </div>
-                            <a href="{{ route('tickets.document', $ticket) }}" target="_blank" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg text-xs transition">
-                                View
-                            </a>
+                        @endif
+                        <div class="flex items-center justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-200">
+                            <span class="font-mono truncate max-w-[200px]">{{ $ticket->resolution_document_name ?? basename($ticket->supporting_document) }}</span>
+                            <div class="flex items-center space-x-2">
+                                <a href="{{ route('tickets.document', $ticket) }}" target="_blank" class="text-sky-700 hover:underline font-bold text-[10px]">
+                                    <i class="fa-solid fa-arrow-up-right-from-square mr-0.5"></i> View
+                                </a>
+                                <span class="text-slate-300">&bull;</span>
+                                <a href="{{ route('tickets.download-document', $ticket) }}" class="text-emerald-700 hover:underline font-bold text-[10px]">
+                                    <i class="fa-solid fa-download mr-0.5"></i> Download
+                                </a>
+                                <span class="text-slate-300">&bull;</span>
+                                <span class="text-emerald-700 font-bold flex items-center gap-1">
+                                    <i class="fa-solid fa-circle-check text-emerald-600"></i> Verified
+                                </span>
+                            </div>
                         </div>
                     @endif
-                    <div class="flex items-center justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-200">
-                        <span class="font-mono truncate max-w-[200px]">{{ $ticket->resolution_document_name ?? basename($ticket->supporting_document) }}</span>
-                        <span class="text-emerald-700 font-bold flex items-center gap-1">
-                            <i class="fa-solid fa-circle-check text-emerald-600"></i> Verified
-                        </span>
-                    </div>
                 </div>
             </div>
 
             @if(auth()->user()->isSuperior() || (auth()->user()->isEngineer() && $ticket->assigned_engineer_id === auth()->id()))
-            <div id="replaceDocModal" class="hidden fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <div id="replaceDocModal" style="display: none;" class="hidden fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
                 <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full border border-slate-200 overflow-hidden">
                     <div class="bg-slate-900 text-white px-5 py-3.5 flex items-center justify-between">
                         <div class="font-bold text-xs flex items-center space-x-2">
                             <i class="fa-solid fa-file-arrow-up text-sky-400"></i>
                             <span>Replace Supporting Document</span>
                         </div>
-                        <button type="button" onclick="document.getElementById('replaceDocModal').classList.add('hidden')" class="text-slate-400 hover:text-white text-sm">
+                        <button type="button" onclick="const m=document.getElementById('replaceDocModal');if(m){m.style.display='none';m.classList.add('hidden');}" class="text-slate-400 hover:text-white text-sm">
                             <i class="fa-solid fa-xmark"></i>
                         </button>
                     </div>
@@ -685,7 +748,7 @@
                             <p class="text-[10px] text-slate-400 mt-1">Accepts images (PNG, JPG, WEBP) or PDF up to 10MB.</p>
                         </div>
                         <div class="flex items-center justify-end space-x-2 pt-2 border-t border-slate-100">
-                            <button type="button" onclick="document.getElementById('replaceDocModal').classList.add('hidden')" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-bold">
+                            <button type="button" onclick="const m=document.getElementById('replaceDocModal');if(m){m.style.display='none';m.classList.add('hidden');}" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-bold">
                                 Cancel
                             </button>
                             <button type="submit" class="px-4 py-1.5 bg-sky-600 hover:bg-sky-700 text-white rounded-lg font-bold shadow-sm">
@@ -990,10 +1053,13 @@
                 </div>
 
                 @if($ticket->engineer)
-                    <!-- Currently Assigned Profile -->
+                    <!-- Currently Assigned Profile (Lead + Support Team) -->
                     <div class="bg-slate-50 p-3.5 rounded-lg border border-slate-200 text-xs space-y-2">
                         <div class="flex items-center justify-between">
-                            <span class="font-bold text-sm text-slate-900">{{ $ticket->engineer->name }}</span>
+                            <div class="flex items-center space-x-1.5">
+                                <span class="px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 text-[10px] font-extrabold uppercase">Lead</span>
+                                <span class="font-bold text-sm text-slate-900">{{ $ticket->engineer->name }}</span>
+                            </div>
                             <span class="px-2 py-0.5 rounded text-[10px] font-semibold {{ $ticket->engineer->is_available ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800' }}">
                                 {{ $ticket->engineer->is_available ? 'Available' : 'On Leave' }}
                             </span>
@@ -1006,6 +1072,24 @@
                             <i class="fa-brands fa-whatsapp text-emerald-600"></i>
                             <span>Phone: <strong class="text-emerald-700 font-mono">{{ $ticket->engineer->phone_whatsapp }}</strong></span>
                         </div>
+
+                        @php
+                            $supportEngineers = $ticket->activeTicketEngineers()->where('role', 'support')->with('engineer')->get();
+                        @endphp
+                        @if($supportEngineers->isNotEmpty())
+                            <div class="pt-2 border-t border-slate-200/80 space-y-1.5">
+                                <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Aligned Support Engineers ({{ $supportEngineers->count() }}):</span>
+                                <div class="flex flex-wrap gap-1.5">
+                                    @foreach($supportEngineers as $ste)
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium bg-slate-200/80 text-slate-800 border border-slate-300">
+                                            <i class="fa-solid fa-user-gear text-slate-500 mr-1 text-[9px]"></i>
+                                            {{ $ste->engineer?->name ?? 'Engineer' }} ({{ $ste->engineer?->base_city ?? 'N/A' }})
+                                        </span>
+                                    @endforeach
+                                </div>
+                            </div>
+                        @endif
+
                         <div class="text-[10px] text-slate-400 pt-1 border-t border-slate-200">
                             Assigned by: {{ $ticket->assignedBy?->name ?? 'Admin' }} on {{ $ticket->assigned_at?->format('d M, h:i A') }}
                         </div>
@@ -1027,6 +1111,20 @@
                                 </option>
                             @endforeach
                         </select>
+                        <div>
+                            <label class="block text-[11px] font-semibold text-slate-600 mb-1">
+                                Additional Support Engineers <span class="font-normal text-slate-400">(optional &mdash; hold Ctrl/Cmd to pick several)</span>
+                            </label>
+                            @php $currentSupportIds = $ticket->activeTicketEngineers()->where('role', 'support')->pluck('engineer_id')->all(); @endphp
+                            <select name="support_engineer_ids[]" multiple size="4" class="w-full border border-slate-300 rounded-lg p-2 text-xs focus:ring-1 focus:ring-sky-500 bg-white">
+                                @foreach($engineers as $eng)
+                                    <option value="{{ $eng->id }}" {{ in_array($eng->id, $currentSupportIds) ? 'selected' : '' }}>
+                                        {{ $eng->name }} &bull; {{ $eng->base_city }} &bull; {{ $eng->specialization }}
+                                    </option>
+                                @endforeach
+                            </select>
+                            <p class="text-[10px] text-slate-400 mt-1">Any aligned engineer can mark the ticket resolved. Each engineer claims their own expense.</p>
+                        </div>
                         <div>
                             <label class="block text-[11px] font-semibold text-slate-600 mb-1">Define TAT / SLA Target:</label>
                             <select name="sla_tat" class="w-full border border-slate-300 rounded-lg p-2 text-xs focus:ring-1 focus:ring-sky-500 bg-white">
@@ -1564,12 +1662,13 @@
                             <span>In Return Transit to Bank Branch (Tracking: {{ $ticket->return_tracking_number }})</span>
                         </span>
                     @else
-                        <!-- Standard On-Site Actions -->
-                        <!-- Option: Mark as Complete -->
-                        <button type="button" onclick="openEngineerCompleteModal()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs shadow-md shadow-emerald-900/40 transition flex items-center space-x-1.5 active:scale-95 cursor-pointer">
-                            <i class="fa-solid fa-circle-check text-sm"></i>
-                            <span>Mark as Complete</span>
-                        </button>
+                        <!-- Option: Mark as Complete (Any Assigned Engineer or Manager) -->
+                        @if($ticket->hasEngineer(auth()->user()) || auth()->user()->isSuperior())
+                            <button type="button" onclick="openEngineerCompleteModal()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs shadow-md shadow-emerald-900/40 transition flex items-center space-x-1.5 active:scale-95 cursor-pointer">
+                                <i class="fa-solid fa-circle-check text-sm"></i>
+                                <span>Mark as Complete</span>
+                            </button>
+                        @endif
 
                         <!-- Option: Send to Workshop (Modal Trigger) -->
                         <button type="button" onclick="openEngineerWorkshopModal()" class="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl text-xs shadow-md shadow-purple-900/40 transition flex items-center space-x-1.5 active:scale-95 cursor-pointer">
@@ -1763,6 +1862,25 @@
                     </button>
                 </form>
             @endif
+
+            <!-- Reopen Ticket (Operations Manager / Admin when Resolved or Closed within 15-day window) -->
+            @if(auth()->user()->canReopenTickets())
+                @if($ticket->canBeReopened())
+                    <button type="button" 
+                            onclick="openReopenModal()"
+                            class="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-lg text-xs shadow-sm transition flex items-center space-x-1.5 cursor-pointer"
+                            title="{{ $ticket->reopenDaysRemaining() }} days remaining in 15-day reopen window">
+                        <i class="fa-solid fa-rotate-left"></i>
+                        <span>Reopen Ticket (Tour {{ ((int)$ticket->current_cycle_no ?: 1) + 1 }})</span>
+                        <span class="text-[10px] opacity-80 font-normal">({{ $ticket->reopenDaysRemaining() }}d left)</span>
+                    </button>
+                @elseif(in_array($ticket->status, ['resolved', 'closed']) && $ticket->isReopenWindowExpired())
+                    <span class="px-3 py-1.5 bg-slate-100 text-slate-500 rounded-lg text-xs font-semibold border border-slate-200 flex items-center gap-1.5" title="Complaint was resolved/closed more than 15 days ago">
+                        <i class="fa-solid fa-lock text-slate-400"></i>
+                        <span>Reopen Window Expired (&gt; 15 days)</span>
+                    </span>
+                @endif
+            @endif
         </div>
     </div>
     @endif
@@ -1827,11 +1945,16 @@
                                 <span class="absolute -left-[27px] top-4 w-3.5 h-3.5 rounded-full border-2 border-white bg-indigo-600 shadow"></span>
                                 
                                 <div class="flex items-start justify-between gap-2 mb-1.5">
-                                    <div>
+                                    <div class="flex items-center space-x-1.5 flex-wrap">
+                                        @if(!empty($item['tour_no']))
+                                            <span class="bg-purple-100 text-purple-800 font-extrabold px-1.5 py-0.5 rounded text-[10px] uppercase border border-purple-200">
+                                                Tour {{ $item['tour_no'] }}
+                                            </span>
+                                        @endif
                                         <span class="bg-indigo-100 text-indigo-800 font-extrabold px-2 py-0.5 rounded text-[10px] uppercase">
                                             Day {{ $item['day_number'] }}
                                         </span>
-                                        <span class="font-bold text-slate-800 ml-1.5">{{ $item['action_taken'] }}</span>
+                                        <span class="font-bold text-slate-800 ml-1">{{ $item['action_taken'] }}</span>
                                     </div>
                                     <span class="text-[10px] text-slate-400 font-mono">
                                         {{ $item['submitted_at'] ? $item['submitted_at']->format('d M Y, h:i A') : '' }}
@@ -2278,6 +2401,7 @@
 @include('tickets.partials.approval-modals')
 @if(!auth()->user()->isEngineer())
     @include('tickets.partials.send-resolution-email-modal')
+    @include('tickets.partials.reopen-modal')
 @endif
 @endsection
 

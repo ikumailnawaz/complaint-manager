@@ -22,16 +22,29 @@
             </div>
         </div>
 
-        <div>
-            <span class="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider
-                {{ $claim->status === 'submitted' ? 'bg-amber-100 text-amber-800' : '' }}
-                {{ $claim->status === 'approved' ? 'bg-blue-100 text-blue-800' : '' }}
-                {{ $claim->status === 'rejected' ? 'bg-rose-100 text-rose-800' : '' }}
-                {{ $claim->status === 'paid' ? 'bg-emerald-100 text-emerald-800' : '' }}">
-                {{ $claim->status }}
-            </span>
-            @if($claim->resubmission_count > 0)
-                <span class="block text-[10px] text-amber-700 text-right mt-1 font-semibold">Re-submitted x{{ $claim->resubmission_count }}</span>
+        <div class="flex items-center space-x-2">
+            <div>
+                <span class="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider
+                    {{ $claim->status === 'submitted' ? 'bg-amber-100 text-amber-800' : '' }}
+                    {{ $claim->status === 'approved' ? 'bg-blue-100 text-blue-800' : '' }}
+                    {{ $claim->status === 'rejected' ? 'bg-rose-100 text-rose-800' : '' }}
+                    {{ $claim->status === 'paid' ? 'bg-emerald-100 text-emerald-800' : '' }}">
+                    {{ $claim->status }}
+                </span>
+                @if($claim->resubmission_count > 0)
+                    <span class="block text-[10px] text-amber-700 text-right mt-1 font-semibold">Re-submitted x{{ $claim->resubmission_count }}</span>
+                @endif
+            </div>
+
+            @if(($claim->tour_no ?? 1) > 1 || ($claim->ticket?->current_cycle_no ?? 1) > 1)
+                <span class="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-purple-100 text-purple-900 border border-purple-300 flex items-center gap-1 shadow-2xs">
+                    <i class="fa-solid fa-rotate-left text-[11px] text-purple-700"></i>
+                    <span>Tour {{ $claim->tour_no ?? 1 }} (Reopened)</span>
+                </span>
+            @else
+                <span class="px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
+                    Tour 1
+                </span>
             @endif
         </div>
     </div>
@@ -201,6 +214,61 @@
                     <div class="mt-3 p-3 bg-slate-100 rounded-lg text-xs text-slate-700 border border-slate-200">
                         <strong class="text-slate-900 block mb-0.5">Admin Audit Notes / Feedback:</strong>
                         <p class="italic">"{{ $claim->admin_notes }}"</p>
+                    </div>
+                @endif
+
+                <!-- Linked Ticket Tours & Multi-Tour Expense History (Fool-Proof Anti-Exploitation) -->
+                @php
+                    $siblingClaims = $claim->ticket ? $claim->ticket->expenseClaims()->where('id', '!=', $claim->id)->with('engineer')->get() : collect();
+                @endphp
+                @if($siblingClaims->isNotEmpty())
+                    <div class="mt-4 pt-4 border-t border-slate-200 space-y-3">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-bold uppercase tracking-wider text-purple-900 flex items-center gap-1.5">
+                                <i class="fa-solid fa-clock-rotate-left text-purple-600"></i>
+                                <span>Multi-Tour History on this Ticket ({{ $siblingClaims->count() }} other claim{{ $siblingClaims->count() > 1 ? 's' : '' }})</span>
+                            </span>
+                            <span class="text-[10px] font-bold text-purple-700 bg-purple-100 px-2 py-0.5 rounded-full border border-purple-200">
+                                Reopened Ticket Audit
+                            </span>
+                        </div>
+                        <p class="text-[11px] text-slate-500">
+                            Compare with claims submitted on earlier tours of Ticket #{{ $claim->ticket?->ticket_no }} to prevent duplicate billing or inflated distance claims.
+                        </p>
+
+                        <div class="space-y-2">
+                            @foreach($siblingClaims as $sc)
+                                @php
+                                    $isDuplicateRisk = ($sc->engineer_id === $claim->engineer_id && abs($sc->claimed_amount - $claim->claimed_amount) < 0.01);
+                                @endphp
+                                <div class="p-3 rounded-lg border {{ $isDuplicateRisk ? 'bg-amber-50/70 border-amber-300' : 'bg-slate-50 border-slate-200' }} text-xs space-y-1">
+                                    <div class="flex items-center justify-between">
+                                        <div class="flex items-center space-x-1.5">
+                                            <span class="px-1.5 py-0.2 rounded text-[10px] font-black bg-purple-200 text-purple-900">
+                                                Tour {{ $sc->tour_no ?? 1 }}
+                                            </span>
+                                            <a href="{{ route('expenses.show', $sc) }}" class="font-bold text-sky-700 hover:underline">
+                                                #EXP-{{ str_pad($sc->id, 4, '0', STR_PAD_LEFT) }}
+                                            </a>
+                                            <span class="text-slate-500">&bull; {{ $sc->engineer?->name }}</span>
+                                        </div>
+                                        <span class="font-extrabold text-slate-900">PKR {{ number_format($sc->claimed_amount, 2) }}</span>
+                                    </div>
+                                    <div class="flex items-center justify-between text-[11px] text-slate-500">
+                                        <span>Route: {{ $sc->from_city }} &rarr; {{ $sc->to_city }} ({{ $sc->ai_distance_km ?? 0 }} km)</span>
+                                        <span class="capitalize font-semibold {{ $sc->status === 'paid' ? 'text-emerald-700' : ($sc->status === 'approved' ? 'text-blue-700' : 'text-slate-600') }}">
+                                            {{ $sc->status }}
+                                        </span>
+                                    </div>
+                                    @if($isDuplicateRisk)
+                                        <div class="text-[10px] text-amber-800 font-bold flex items-center gap-1 mt-1 pt-1 border-t border-amber-200">
+                                            <i class="fa-solid fa-triangle-exclamation text-amber-600"></i>
+                                            <span>Notice: Same claimed amount (PKR {{ number_format($sc->claimed_amount, 2) }}) by same engineer on earlier tour. Verify reason & receipts.</span>
+                                        </div>
+                                    @endif
+                                </div>
+                            @endforeach
+                        </div>
                     </div>
                 @endif
             </div>

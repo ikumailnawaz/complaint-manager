@@ -1,5 +1,5 @@
 <!-- Mark Ticket as Completed Modal with Live Upload Progress -->
-<div id="engineerCompleteModal" class="hidden fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+<div id="engineerCompleteModal" style="display: none;" class="hidden fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
     <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full border border-slate-200 overflow-hidden transform transition-all">
         <!-- Modal Header -->
         <div class="bg-emerald-600 px-6 py-4 text-white flex items-center justify-between">
@@ -169,6 +169,7 @@ function openCompleteModal(ticketId, ticketNo, bankName) {
     // Show Modal
     const modal = document.getElementById('engineerCompleteModal');
     if (modal) {
+        modal.style.display = 'flex';
         modal.classList.remove('hidden');
     }
 }
@@ -176,6 +177,7 @@ function openCompleteModal(ticketId, ticketNo, bankName) {
 function closeCompleteModal() {
     const modal = document.getElementById('engineerCompleteModal');
     if (modal) {
+        modal.style.display = 'none';
         modal.classList.add('hidden');
     }
     currentCompleteTicketId = null;

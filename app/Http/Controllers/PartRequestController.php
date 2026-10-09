@@ -102,7 +102,7 @@ class PartRequestController extends Controller
         }
 
         $ticketQuery = auth()->user()->isEngineer()
-            ? Ticket::where('assigned_engineer_id', auth()->id())
+            ? Ticket::forEngineer(auth()->id())
             : Ticket::query();
 
         $tickets = $ticketQuery->where('status', '!=', 'awaiting_workshop')
@@ -232,7 +232,7 @@ class PartRequestController extends Controller
         }
 
         $ticketQuery = auth()->user()->isEngineer()
-            ? Ticket::where('assigned_engineer_id', auth()->id())
+            ? Ticket::forEngineer(auth()->id())
             : Ticket::query();
 
         $tickets = $ticketQuery->where('status', '!=', 'awaiting_workshop')

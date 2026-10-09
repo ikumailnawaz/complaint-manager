@@ -121,7 +121,9 @@
    <Column ss:Width="85"/>  <!-- Ticket No -->
    <Column ss:Width="160"/> <!-- Bank Name -->
    <Column ss:Width="140"/> <!-- Branch / Location -->
+   <Column ss:Width="220"/> <!-- Branch Address -->
    <Column ss:Width="130"/> <!-- Engineer Name -->
+   <Column ss:Width="140"/> <!-- Engineer Location -->
    <Column ss:Width="90"/>  <!-- Category -->
    <Column ss:Width="180"/> <!-- Description -->
    <Column ss:Width="85"/>  <!-- From City -->
@@ -129,7 +131,7 @@
    <Column ss:Width="95"/>  <!-- Trip Type -->
    <Column ss:Width="110"/> <!-- AI Distance KM -->
    <Column ss:Width="130"/> <!-- Claimed Amount PKR -->
-   <Column ss:Width="130"/> <!-- Suggested Amount PKR -->
+   <Column ss:Width="130"/> <!-- Applied Rate PKR/KM -->
    <Column ss:Width="95"/>  <!-- Claim Status -->
    <Column ss:Width="120"/> <!-- Settlement Status -->
    <Column ss:Width="110"/> <!-- Payment Method -->
@@ -142,7 +144,9 @@
     <Cell ss:StyleID="HeaderMaster"><Data ss:Type="String">Ticket No</Data></Cell>
     <Cell ss:StyleID="HeaderMaster"><Data ss:Type="String">Bank Name</Data></Cell>
     <Cell ss:StyleID="HeaderMaster"><Data ss:Type="String">Branch / Location</Data></Cell>
+    <Cell ss:StyleID="HeaderMaster"><Data ss:Type="String">Branch Address</Data></Cell>
     <Cell ss:StyleID="HeaderMaster"><Data ss:Type="String">Engineer Name</Data></Cell>
+    <Cell ss:StyleID="HeaderMaster"><Data ss:Type="String">Engineer Location</Data></Cell>
     <Cell ss:StyleID="HeaderMaster"><Data ss:Type="String">Category</Data></Cell>
     <Cell ss:StyleID="HeaderMaster"><Data ss:Type="String">Description</Data></Cell>
     <Cell ss:StyleID="HeaderMaster"><Data ss:Type="String">From City</Data></Cell>
@@ -150,7 +154,7 @@
     <Cell ss:StyleID="HeaderMaster"><Data ss:Type="String">Trip Type</Data></Cell>
     <Cell ss:StyleID="HeaderMaster"><Data ss:Type="String">AI Distance (KM)</Data></Cell>
     <Cell ss:StyleID="HeaderMaster"><Data ss:Type="String">Claimed Amount (PKR)</Data></Cell>
-    <Cell ss:StyleID="HeaderMaster"><Data ss:Type="String">Suggested Amount (PKR)</Data></Cell>
+    <Cell ss:StyleID="HeaderMaster"><Data ss:Type="String">Applied Rate (PKR/KM)</Data></Cell>
     <Cell ss:StyleID="HeaderMaster"><Data ss:Type="String">Claim Status</Data></Cell>
     <Cell ss:StyleID="HeaderMaster"><Data ss:Type="String">Settlement Status</Data></Cell>
     <Cell ss:StyleID="HeaderMaster"><Data ss:Type="String">Payment Method</Data></Cell>
@@ -171,7 +175,9 @@
     <Cell ss:StyleID="CellCenter"><Data ss:Type="String">{{ $c->ticket?->ticket_no ?? 'N/A' }}</Data></Cell>
     <Cell ss:StyleID="CellLeft"><Data ss:Type="String">{{ $c->ticket?->bank_name ?? 'N/A' }}</Data></Cell>
     <Cell ss:StyleID="CellLeft"><Data ss:Type="String">{{ $c->ticket?->branch_location ?? $c->to_city }}</Data></Cell>
+    <Cell ss:StyleID="CellLeft"><Data ss:Type="String">{{ $c->ticket?->branch_address ?? 'N/A' }}</Data></Cell>
     <Cell ss:StyleID="CellLeft"><Data ss:Type="String">{{ $c->engineer?->name ?? 'N/A' }}</Data></Cell>
+    <Cell ss:StyleID="CellLeft"><Data ss:Type="String">{{ $c->engineer?->base_city ?? ($c->engineer?->home_address ?? 'N/A') }}</Data></Cell>
     <Cell ss:StyleID="CellCenter"><Data ss:Type="String">{{ strtoupper($c->category ?? 'TRAVEL') }}</Data></Cell>
     <Cell ss:StyleID="CellLeft"><Data ss:Type="String">{{ $c->description ?? 'N/A' }}</Data></Cell>
     <Cell ss:StyleID="CellLeft"><Data ss:Type="String">{{ $c->from_city }}</Data></Cell>
@@ -179,7 +185,11 @@
     <Cell ss:StyleID="CellCenter"><Data ss:Type="String">{{ ucwords(str_replace('_', ' ', $c->trip_type)) }}</Data></Cell>
     <Cell ss:StyleID="CellNumber"><Data ss:Type="Number">{{ number_format($c->ai_distance_km ?? 0, 2, '.', '') }}</Data></Cell>
     <Cell ss:StyleID="CellCurrency"><Data ss:Type="Number">{{ number_format($c->claimed_amount, 2, '.', '') }}</Data></Cell>
-    <Cell ss:StyleID="CellCurrency"><Data ss:Type="Number">{{ number_format($c->suggested_amount ?? 0, 2, '.', '') }}</Data></Cell>
+    @if($c->applied_rate !== null)
+     <Cell ss:StyleID="CellCurrency"><Data ss:Type="Number">{{ number_format($c->applied_rate, 2, '.', '') }}</Data></Cell>
+    @else
+     <Cell ss:StyleID="CellCenter"><Data ss:Type="String">N/A</Data></Cell>
+    @endif
     <Cell ss:StyleID="{{ $statusStyle }}"><Data ss:Type="String">{{ strtoupper($c->status) }}</Data></Cell>
     <Cell ss:StyleID="{{ $c->status === 'paid' ? 'StatusPaid' : 'StatusPending' }}"><Data ss:Type="String">{{ $c->status === 'paid' ? 'Paid & Settled' : 'Unpaid & Unsettled' }}</Data></Cell>
     <Cell ss:StyleID="CellCenter"><Data ss:Type="String">{{ strtoupper(str_replace('_', ' ', $c->payment_method ?? 'N/A')) }}</Data></Cell>
@@ -200,6 +210,7 @@
    <Column ss:Width="180"/> <!-- Total AI Estimated Distance (KM) -->
    <Column ss:Width="160"/> <!-- Average Tour Cost (PKR) -->
    <Column ss:Width="160"/> <!-- Total Tour Cost (PKR) -->
+   <Column ss:Width="160"/> <!-- Average Per KM Cost (PKR) -->
 
    <Row ss:Height="26">
     <Cell ss:StyleID="HeaderSummary"><Data ss:Type="String">Engineer Name</Data></Cell>
@@ -207,6 +218,7 @@
     <Cell ss:StyleID="HeaderSummary"><Data ss:Type="String">Total AI Estimated Distance (KM)</Data></Cell>
     <Cell ss:StyleID="HeaderSummary"><Data ss:Type="String">Average Tour Cost (PKR)</Data></Cell>
     <Cell ss:StyleID="HeaderSummary"><Data ss:Type="String">Total Tour Cost (PKR)</Data></Cell>
+    <Cell ss:StyleID="HeaderSummary"><Data ss:Type="String">Average Per KM Cost (PKR)</Data></Cell>
    </Row>
 
    @foreach($engineerSummaries as $s)
@@ -216,6 +228,7 @@
     <Cell ss:StyleID="CellNumber"><Data ss:Type="Number">{{ number_format($s['total_ai_distance'], 2, '.', '') }}</Data></Cell>
     <Cell ss:StyleID="CellCurrency"><Data ss:Type="Number">{{ number_format($s['avg_tour_cost'], 2, '.', '') }}</Data></Cell>
     <Cell ss:StyleID="CellCurrency"><Data ss:Type="Number">{{ number_format($s['total_tour_cost'], 2, '.', '') }}</Data></Cell>
+    <Cell ss:StyleID="CellCurrency"><Data ss:Type="Number">{{ number_format($s['avg_per_km_cost'] ?? 0, 2, '.', '') }}</Data></Cell>
    </Row>
    @endforeach
 
@@ -226,6 +239,7 @@
     <Cell ss:StyleID="TotalNumber"><Data ss:Type="Number">{{ number_format($totalDistance, 2, '.', '') }}</Data></Cell>
     <Cell ss:StyleID="TotalCurrency"><Data ss:Type="Number">{{ number_format($overallAvg, 2, '.', '') }}</Data></Cell>
     <Cell ss:StyleID="TotalCurrency"><Data ss:Type="Number">{{ number_format($grandTotalCost, 2, '.', '') }}</Data></Cell>
+    <Cell ss:StyleID="TotalCurrency"><Data ss:Type="Number">{{ number_format($overallAvgPerKm ?? 0, 2, '.', '') }}</Data></Cell>
    </Row>
 
   </Table>

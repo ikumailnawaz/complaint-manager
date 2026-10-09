@@ -1,5 +1,5 @@
 <!-- Send Resolution Confirmation Email Modal -->
-<div id="sendResolutionEmailModal" class="hidden fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+<div id="sendResolutionEmailModal" style="display: none;" class="hidden fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
     <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full border border-slate-200 overflow-hidden transform transition-all">
         <!-- Header -->
         <div class="bg-gradient-to-r from-emerald-800 to-teal-800 px-6 py-4 text-white flex items-center justify-between">
@@ -165,6 +165,7 @@ function openResolutionEmailModal(ticketId, ticketNo, bankName, toEmail, ccEmail
 
     const modal = document.getElementById('sendResolutionEmailModal');
     if (modal) {
+        modal.style.display = 'flex';
         modal.classList.remove('hidden');
     }
 }
@@ -172,6 +173,7 @@ function openResolutionEmailModal(ticketId, ticketNo, bankName, toEmail, ccEmail
 function closeResolutionEmailModal() {
     const modal = document.getElementById('sendResolutionEmailModal');
     if (modal) {
+        modal.style.display = 'none';
         modal.classList.add('hidden');
     }
 }

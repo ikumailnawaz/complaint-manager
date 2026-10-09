@@ -114,7 +114,7 @@ class Phase2Test extends TestCase
             ->assertJson([
                 'success' => true,
                 'is_complaint' => true,
-                'ticket_no' => '174793',
+                'ticket_no' => 'BAF-174793',
                 'ticket_no_source' => 'from_email',
                 'bank_name' => 'Bank Alfalah',
                 'branch_location' => 'Lahore',
@@ -123,7 +123,7 @@ class Phase2Test extends TestCase
             ]);
 
         $this->assertDatabaseHas('tickets', [
-            'ticket_no' => '174793',
+            'ticket_no' => 'BAF-174793',
             'ticket_no_source' => 'from_email',
             'bank_name' => 'Bank Alfalah',
             'branch_location' => 'Lahore',
@@ -135,7 +135,7 @@ class Phase2Test extends TestCase
         ]);
 
         // Verify initial audit log created
-        $ticket = Ticket::where('ticket_no', '174793')->first();
+        $ticket = Ticket::where('ticket_no', 'BAF-174793')->first();
         $this->assertNotNull($ticket);
         $this->assertDatabaseHas('ticket_logs', [
             'ticket_id' => $ticket->id,
@@ -255,12 +255,12 @@ class Phase2Test extends TestCase
 
         $response->assertRedirect();
         $this->assertDatabaseHas('tickets', [
-            'ticket_no' => '180022',
+            'ticket_no' => 'BAF-180022',
             'status' => 'open',
             'bank_name' => 'Bank Alfalah',
         ]);
 
-        $createdTicket = Ticket::where('ticket_no', '180022')->first();
+        $createdTicket = Ticket::where('ticket_no', 'BAF-180022')->first();
         $this->assertNotNull($createdTicket);
 
         // Email record should now link to the ticket
@@ -426,9 +426,9 @@ class Phase2Test extends TestCase
         $response->assertRedirect();
         $response->assertSessionHas('success');
 
-        // Verify only 1 ticket was created with ticket_no 174698
-        $this->assertEquals(1, Ticket::where('ticket_no', '174698')->count());
-        $createdTicket = Ticket::where('ticket_no', '174698')->first();
+        // Verify only 1 ticket was created with ticket_no BAF-174698
+        $this->assertEquals(1, Ticket::where('ticket_no', 'BAF-174698')->count());
+        $createdTicket = Ticket::where('ticket_no', 'BAF-174698')->first();
 
         // Both emails must now be linked to that single ticket
         $email1->refresh();

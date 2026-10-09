@@ -90,7 +90,7 @@ class TicketController extends Controller
 
         if (Auth::user()->isEngineer()) {
             $query->where(function ($q) {
-                $q->where('assigned_engineer_id', Auth::id())
+                $q->forEngineer(Auth::id())
                   ->orWhere('original_field_engineer_id', Auth::id());
             });
         }
@@ -118,7 +118,7 @@ class TicketController extends Controller
             return redirect()->route('tickets.open');
         }
 
-        $query = Ticket::with(['engineer', 'assignedBy'])->latest();
+        $query = Ticket::with(['engineer', 'assignedBy', 'activeTicketEngineers'])->latest();
 
         // Filters
         if ($request->filled('status')) {
@@ -155,7 +155,7 @@ class TicketController extends Controller
         // If logged in as engineer, default to their own tickets unless filtering
         if (Auth::user()->isEngineer()) {
             $query->where(function ($q) {
-                $q->where('assigned_engineer_id', Auth::id())
+                $q->forEngineer(Auth::id())
                   ->orWhere('original_field_engineer_id', Auth::id());
             });
         }
@@ -329,15 +329,17 @@ class TicketController extends Controller
 
         $request->validate([
             'engineer_id' => 'required|exists:users,id',
+            'support_engineer_ids' => 'nullable|array',
+            'support_engineer_ids.*' => 'exists:users,id',
             'notes' => 'nullable|string',
             'sla_tat' => 'nullable|string',
             'custom_sla_deadline' => 'nullable|date',
         ]);
 
         $engineer = User::findOrFail($request->engineer_id);
+        $supportIds = array_values(array_diff(array_map('intval', $request->input('support_engineer_ids', [])), [$engineer->id]));
 
         $updateData = [
-            'assigned_engineer_id' => $engineer->id,
             'assigned_by_id' => Auth::id(),
             'assigned_at' => Carbon::now(),
             'status' => 'assigned',
@@ -363,16 +365,25 @@ class TicketController extends Controller
 
         $ticket->update($updateData);
 
+        $alignment = app(\App\Services\TicketCycleService::class)
+            ->syncEngineers($ticket, $engineer->id, $supportIds, Auth::user());
+
+        $supportNames = User::whereIn('id', $supportIds)->pluck('name')->implode(', ');
+
         TicketLog::create([
             'ticket_id' => $ticket->id,
             'user_id' => Auth::id(),
             'action' => 'assigned',
-            'notes' => "Manually assigned to Engineer {$engineer->name} ({$engineer->base_city}, {$engineer->phone_whatsapp}). " . ($request->sla_tat ? "Defined TAT: {$request->sla_tat}. " : "") . ($request->notes ? "Note: {$request->notes}" : ''),
+            'notes' => "Manually assigned to Lead Engineer {$engineer->name} ({$engineer->base_city}, {$engineer->phone_whatsapp})."
+                . ($supportNames ? " Support engineers: {$supportNames}." : '')
+                . ($request->sla_tat ? " Defined TAT: {$request->sla_tat}." : '')
+                . ($request->notes ? " Note: {$request->notes}" : ''),
         ]);
 
-        \App\Services\NotificationService::notifyTicketAssigned($ticket, $engineer);
+        \App\Services\NotificationService::notifyEngineerAlignment($ticket->fresh(), $alignment['added'], $alignment['removed']);
 
-        return back()->with('success', "Engineer {$engineer->name} assigned successfully. Next step: Click 'Notify on WhatsApp' to dispatch screenshot & tag engineer.");
+        $teamCount = count($supportIds) + 1;
+        return back()->with('success', "{$teamCount} engineer(s) aligned (lead: {$engineer->name}). Next step: Click 'Notify on WhatsApp' to dispatch screenshot & tag engineers.");
     }
 
     public function notifyWhatsApp(Request $request, Ticket $ticket, WhatsAppService $whatsapp)
@@ -666,7 +677,7 @@ class TicketController extends Controller
         $user = Auth::user();
 
         // Accessible by assigned engineer OR operations management (admin, super_admin, superior)
-        if ($user->isEngineer() && $ticket->assigned_engineer_id !== $user->id) {
+        if ($user->isEngineer() && !$ticket->hasEngineer($user)) {
             abort(403, 'Field engineers can only submit daily feedback for tickets assigned to them.');
         }
 
@@ -688,16 +699,18 @@ class TicketController extends Controller
         $todayDate = Carbon::today();
         $calendarDay = max(1, (int) $ticketStartDate->diffInDays($todayDate) + 1);
 
-        // Check if a feedback was already logged today
-        $existingTodayFeedback = TicketFeedback::where('ticket_id', $ticket->id)
-            ->whereDate('submitted_at', $todayDate)
-            ->first();
+        // Check if THIS submitter already logged a report today in the CURRENT tour.
+        // (Other engineers' reports and earlier tours are never overwritten.)
+        $currentCycleId = $ticket->currentCycle()?->id;
+        $todayQuery = fn () => TicketFeedback::where('ticket_id', $ticket->id)
+            ->when($currentCycleId, fn ($q) => $q->where('cycle_id', $currentCycleId))
+            ->where('submitted_by_id', $user->id);
+
+        $existingTodayFeedback = $todayQuery()->whereDate('submitted_at', $todayDate)->first();
 
         if (!$existingTodayFeedback) {
             // Also fallback check on created_at in case submitted_at was null
-            $existingTodayFeedback = TicketFeedback::where('ticket_id', $ticket->id)
-                ->whereDate('created_at', $todayDate)
-                ->first();
+            $existingTodayFeedback = $todayQuery()->whereDate('created_at', $todayDate)->first();
         }
 
         $submitterRole = $user->isEngineer() ? 'Field Engineer' : 'Operations Manager';
@@ -733,7 +746,7 @@ class TicketController extends Controller
         // Create new feedback for today's calendar day
         $feedback = TicketFeedback::create([
             'ticket_id'       => $ticket->id,
-            'engineer_id'     => $ticket->assigned_engineer_id ?? $user->id,
+            'engineer_id'     => $user->isEngineer() ? $user->id : ($ticket->assigned_engineer_id ?? $user->id),
             'submitted_by_id' => $user->id,
             'day_number'      => $calendarDay,
             'action_taken'    => $request->action_taken,
@@ -766,7 +779,7 @@ class TicketController extends Controller
             return back()->with('error', "This ticket is already in Central Workshop flow and cannot be dispatched again.");
         }
 
-        if ($ticket->status === 'resolved' && $ticket->expenseClaims()->exists()) {
+        if ($ticket->status === 'resolved' && $ticket->hasClaimedExpenses()) {
             return back()->with('error', "STRICT AUDIT POLICY: Ticket #{$ticket->ticket_no} is resolved and has claimed expenses. Its status cannot be altered.");
         }
 
@@ -851,8 +864,11 @@ class TicketController extends Controller
     public function markResolved(Request $request, Ticket $ticket)
     {
         $user = Auth::user();
-        if ($user->isEngineer() && $ticket->assigned_engineer_id !== $user->id) {
+        if ($user->isEngineer() && !$ticket->hasEngineer($user)) {
             abort(403, 'Field engineers can only resolve tickets assigned to them.');
+        }
+        if (in_array($ticket->status, ['resolved', 'closed'], true)) {
+            return back()->with('warning', "Ticket #{$ticket->ticket_no} is already {$ticket->status}.");
         }
 
         if ($ticket->status === 'awaiting_workshop') {
@@ -918,6 +934,9 @@ class TicketController extends Controller
             'resolution_document_name' => $docName,
         ]);
 
+        app(\App\Services\TicketCycleService::class)
+            ->recordResolution($ticket, $user, $request->resolution_summary, $docPath, $docName);
+
         TicketLog::create([
             'ticket_id' => $ticket->id,
             'user_id' => $user->id,
@@ -940,12 +959,12 @@ class TicketController extends Controller
     public function undoResolve(Request $request, Ticket $ticket)
     {
         $user = Auth::user();
-        if ($user->isEngineer() && $ticket->assigned_engineer_id !== $user->id) {
+        if ($user->isEngineer() && !$ticket->hasEngineer($user)) {
             abort(403, 'Field engineers can only undo resolution for tickets assigned to them.');
         }
 
-        // STRICT POLICY: Once a ticket is marked resolved and expenses are claimed, it cannot be undone
-        if ($ticket->expenseClaims()->exists()) {
+        // STRICT POLICY: Once a ticket is marked resolved and expenses are claimed (in this tour), it cannot be undone
+        if ($ticket->hasClaimedExpenses()) {
             return back()->with('error', "STRICT SLA & AUDIT POLICY: Tour expenses have already been claimed for Ticket #{$ticket->ticket_no}. Once expenses are claimed, resolution is permanent and cannot be undone.");
         }
 
@@ -961,6 +980,8 @@ class TicketController extends Controller
             'status' => 'in_progress',
             'resolved_at' => null,
         ]);
+
+        app(\App\Services\TicketCycleService::class)->undoResolution($ticket);
 
         TicketLog::create([
             'ticket_id' => $ticket->id,
@@ -983,7 +1004,7 @@ class TicketController extends Controller
     public function uploadResolutionDocument(Request $request, Ticket $ticket)
     {
         $user = Auth::user();
-        if ($user->isEngineer() && $ticket->assigned_engineer_id !== $user->id) {
+        if ($user->isEngineer() && !$ticket->hasEngineer($user)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Unauthorized. You can only upload documents for tickets assigned to you.',
@@ -1042,13 +1063,60 @@ class TicketController extends Controller
     }
 
     /**
+     * Download ticket supporting document directly with download header.
+     */
+    public function downloadSupportingDocument(Ticket $ticket)
+    {
+        if (empty($ticket->supporting_document)) {
+            abort(404, 'No supporting document attached to this ticket.');
+        }
+
+        $disk = Storage::disk('public');
+        if ($disk->exists($ticket->supporting_document)) {
+            $filename = $ticket->resolution_document_name ?: basename($ticket->supporting_document);
+            return $disk->download($ticket->supporting_document, $filename);
+        }
+
+        $altPath = public_path('storage/' . $ticket->supporting_document);
+        if (file_exists($altPath)) {
+            $filename = $ticket->resolution_document_name ?: basename($altPath);
+            return response()->download($altPath, $filename);
+        }
+
+        abort(404, 'Supporting document file not found on disk.');
+    }
+
+    /**
+     * Download a specific tour/cycle document from ticket_documents.
+     */
+    public function downloadSpecificDocument(\App\Models\TicketDocument $document)
+    {
+        $disk = Storage::disk('public');
+        $filename = $document->name ?: basename($document->path);
+
+        if ($disk->exists($document->path)) {
+            return $disk->download($document->path, $filename);
+        }
+
+        $altPath = public_path('storage/' . $document->path);
+        if (file_exists($altPath)) {
+            return response()->download($altPath, $filename);
+        }
+
+        abort(404, 'Document file not found on disk.');
+    }
+
+    /**
      * Edit / Replace supporting document for an existing ticket and update record.
      */
     public function updateSupportingDocument(Request $request, Ticket $ticket)
     {
         $user = Auth::user();
-        if ($user->isEngineer() && $ticket->assigned_engineer_id !== $user->id) {
+        if ($user->isEngineer() && !$ticket->hasEngineer($user)) {
             abort(403, 'Unauthorized to update document for this ticket.');
+        }
+        if ($user->isEngineer() && $ticket->status === 'closed') {
+            abort(403, 'This ticket is closed. Its documents are locked; ask the Operations Manager to reopen it.');
         }
 
         $request->validate([
@@ -1068,12 +1136,8 @@ class TicketController extends Controller
             @copy(Storage::disk('public')->path($docPath), $publicTarget);
         } catch (\Throwable $e) {}
 
-        // Remove old document if different
-        if ($ticket->supporting_document && $ticket->supporting_document !== $docPath) {
-            try {
-                Storage::disk('public')->delete($ticket->supporting_document);
-            } catch (\Throwable $e) {}
-        }
+        // Previous documents are never deleted: the old file stays on disk and in ticket_documents.
+        app(\App\Services\TicketCycleService::class)->addDocument($ticket, $user, $docPath, $docName, 'resolution');
 
         $ticket->update([
             'supporting_document' => $docPath,
@@ -1100,10 +1164,61 @@ class TicketController extends Controller
         return back()->with('success', "Supporting document successfully updated to '{$docName}'.");
     }
 
+    public function reopenTicket(Request $request, Ticket $ticket)
+    {
+        $user = Auth::user();
+        if (!$user->canReopenTickets()) {
+            abort(403, 'Only the Operations Manager or an administrator can reopen a ticket.');
+        }
+
+        if (!$ticket->canBeReopened()) {
+            if ($ticket->isReopenWindowExpired()) {
+                return back()->with('error', "Ticket #{$ticket->ticket_no} cannot be reopened because the 15-day reopen window has expired.");
+            }
+            return back()->with('error', "Ticket #{$ticket->ticket_no} is already open (status: {$ticket->status}) and cannot be reopened.");
+        }
+
+        $data = $request->validate([
+            'reason' => 'required|string|min:10|max:2000',
+            'engineer_id' => 'nullable|exists:users,id',
+            'support_engineer_ids' => 'nullable|array',
+            'support_engineer_ids.*' => 'exists:users,id',
+        ]);
+
+        // Default to the team that worked the previous tour.
+        $leadId = (int) ($data['engineer_id'] ?? $ticket->assigned_engineer_id);
+        if (!$leadId) {
+            return back()->with('error', 'Select a lead engineer to reopen this ticket.');
+        }
+
+        if (array_key_exists('support_engineer_ids', $data)) {
+            $supportIds = array_map('intval', $data['support_engineer_ids'] ?? []);
+        } else {
+            $supportIds = $ticket->activeTicketEngineers()
+                ->where('role', 'support')->pluck('engineer_id')->map(fn ($i) => (int) $i)->all();
+        }
+
+        try {
+            $cycle = app(\App\Services\TicketCycleService::class)
+                ->reopen($ticket, $user, $data['reason'], $leadId, $supportIds);
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        $ticket->refresh();
+        \App\Services\NotificationService::notifyTicketReopened($ticket, $cycle, $data['reason']);
+
+        return back()->with('success', "Ticket {$ticket->ticket_no} reopened as Tour {$cycle->cycle_no}. All previous reports, documents and expenses are preserved. Engineers have been notified.");
+    }
+
     public function closeTicket(Request $request, Ticket $ticket)
     {
         if (Auth::user()->isEngineer()) {
             abort(403, 'Only administrators can confirm ticket closure.');
+        }
+
+        if ($ticket->status === 'closed') {
+            return back()->with('warning', "Ticket {$ticket->ticket_no} is already closed.");
         }
 
         $ticket->update([
@@ -1111,11 +1226,13 @@ class TicketController extends Controller
             'closed_at' => Carbon::now(),
         ]);
 
+        app(\App\Services\TicketCycleService::class)->recordClosure($ticket, Auth::user());
+
         TicketLog::create([
             'ticket_id' => $ticket->id,
             'user_id' => Auth::id(),
             'action' => 'closed',
-            'notes' => "Ticket closed and confirmed by Admin " . Auth::user()->name,
+            'notes' => "Ticket closed and confirmed by Admin " . Auth::user()->name . ($ticket->current_cycle_no > 1 ? " (Tour {$ticket->current_cycle_no})" : ''),
         ]);
 
         return back()->with('success', "Ticket {$ticket->ticket_no} is officially closed.");
@@ -1176,7 +1293,7 @@ class TicketController extends Controller
         }
 
         // STRICT POLICY: Once a ticket is resolved and expenses are claimed, resolution cannot be undone or status reverted
-        if ($ticket->status === 'resolved' && $ticket->expenseClaims()->exists()) {
+        if ($ticket->status === 'resolved' && $ticket->hasClaimedExpenses()) {
             if ($validated['status'] !== 'resolved' && $validated['status'] !== 'closed') {
                 return back()->with('error', "STRICT AUDIT POLICY: Ticket #{$ticket->ticket_no} has associated tour expense claims. Resolution cannot be undone or reverted to {$validated['status']}.");
             }

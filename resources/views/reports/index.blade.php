@@ -509,11 +509,19 @@
         </div>
 
         <!-- Bank Audit Aggregate Metric Cards -->
-        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
             <div class="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs">
                 <div class="text-[10px] uppercase font-bold text-slate-400">Audited Complaints</div>
                 <div class="text-xl font-black text-slate-900 mt-0.5">{{ $bankAuditSummary['total'] }}</div>
                 <div class="text-[10px] text-slate-500 font-medium">In selected timeframe</div>
+            </div>
+            <div class="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs">
+                <div class="text-[10px] uppercase font-bold text-amber-600 flex items-center justify-between">
+                    <span>Reopened / Multi-Tour</span>
+                    <i class="fa-solid fa-arrows-rotate text-amber-500"></i>
+                </div>
+                <div class="text-xl font-black text-amber-700 mt-0.5">{{ $bankAuditSummary['reopened_count'] }}</div>
+                <div class="text-[10px] text-slate-500 font-medium">Bank recurrent calls</div>
             </div>
             <div class="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs">
                 <div class="text-[10px] uppercase font-bold text-slate-400">Avg Gross Calendar TAT</div>
@@ -562,6 +570,12 @@
                                             Ref: {{ $t->customer_ref_no }}
                                         </span>
                                     @endif
+                                    @if($t->reopen_count > 0 || ($t->current_cycle_no && $t->current_cycle_no > 1))
+                                        <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1 shadow-2xs">
+                                            <i class="fa-solid fa-arrows-rotate text-amber-600"></i>
+                                            <span>Tour {{ $t->current_cycle_no ?? ($t->reopen_count + 1) }} &bull; Reopened {{ $t->reopen_count }}x</span>
+                                        </span>
+                                    @endif
                                     <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase
                                         {{ $t->status === 'resolved' ? 'bg-emerald-100 text-emerald-800' : '' }}
                                         {{ $t->status === 'in_progress' ? 'bg-blue-100 text-blue-800' : '' }}
@@ -582,7 +596,15 @@
                                 <p class="text-[11px] text-slate-500 mt-0.5">
                                     <span>Terminal: <strong class="text-slate-800">{{ $t->machine_type ?? 'Device' }}</strong> (S/N: <span class="font-mono">{{ $t->machine_serial_no ?? 'N/A' }}</span>)</span>
                                     <span class="mx-1.5 text-slate-300">&bull;</span>
-                                    <span>Assigned Engineer: <strong class="text-slate-800">{{ $t->assignedEngineer?->name ?? 'Unassigned' }}</strong></span>
+                                    <span>Assigned: <strong class="text-slate-800">{{ $t->assignedEngineer?->name ?? 'Unassigned' }}</strong> <span class="text-[9px] px-1 py-0.2 rounded bg-sky-100 text-sky-800 font-bold ml-0.5 uppercase">Lead</span></span>
+                                    @php
+                                        $supportEngs = $t->activeTicketEngineers->filter(fn($e) => !$e->isLead() && $e->engineer);
+                                    @endphp
+                                    @if($supportEngs->count() > 0)
+                                        <span class="text-slate-500 text-[10px] ml-1">
+                                            + {{ $supportEngs->count() }} Support ({{ $supportEngs->pluck('engineer.name')->implode(', ') }})
+                                        </span>
+                                    @endif
                                 </p>
                             </div>
                         </div>
@@ -830,6 +852,92 @@
                             </div>
                         @endif
                     </div>
+
+                    <!-- Reopen & Multi-Tour Lifecycle History Audit (Cycles / Tours) -->
+                    @if($t->cycles && $t->cycles->count() > 1)
+                        <div class="p-4 sm:p-5 bg-amber-50/40 border-t border-amber-200/80 space-y-3">
+                            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                <h4 class="text-xs font-black text-amber-950 uppercase tracking-wider flex items-center gap-1.5">
+                                    <i class="fa-solid fa-arrows-rotate text-amber-700"></i>
+                                    <span>Reopen &amp; Multi-Tour Lifecycle History ({{ $t->cycles->count() }} Tours Logged)</span>
+                                </h4>
+                                <span class="px-2 py-0.5 rounded bg-amber-200/80 text-amber-900 text-[10px] font-bold self-start sm:self-auto">
+                                    Recurrent Bank Issue &bull; Fresh SLA Clock Per Reopening
+                                </span>
+                            </div>
+
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-left text-xs border-collapse bg-white rounded-xl border border-amber-200 overflow-hidden shadow-2xs">
+                                    <thead>
+                                        <tr class="bg-amber-100/70 border-b border-amber-200 text-amber-950 uppercase font-black tracking-wider text-[10px]">
+                                            <th class="py-2.5 px-3">Tour #</th>
+                                            <th class="py-2.5 px-3">Status</th>
+                                            <th class="py-2.5 px-3">Opened / Reopened At</th>
+                                            <th class="py-2.5 px-3">Authorized By</th>
+                                            <th class="py-2.5 px-3">Reopen Reason / Bank Recurrence</th>
+                                            <th class="py-2.5 px-3">Resolved / Re-Closed At</th>
+                                            <th class="py-2.5 px-3 text-right">Tour TAT Duration</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-amber-100 text-[11px]">
+                                        @foreach($t->cycles as $cycle)
+                                            <tr class="hover:bg-amber-50/50 transition {{ $cycle->isOpen() ? 'bg-amber-50/30 font-semibold' : '' }}">
+                                                <td class="py-2.5 px-3 font-mono font-bold text-slate-900 whitespace-nowrap">
+                                                    <span class="px-2 py-0.5 rounded {{ $cycle->cycle_no === 1 ? 'bg-slate-100 text-slate-800' : 'bg-amber-100 text-amber-900 font-black' }}">
+                                                        Tour {{ $cycle->cycle_no }} {{ $cycle->cycle_no === 1 ? '(Initial)' : '(Reopened)' }}
+                                                    </span>
+                                                </td>
+                                                <td class="py-2.5 px-3 whitespace-nowrap">
+                                                    <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase
+                                                        {{ $cycle->status === 'closed' ? 'bg-slate-100 text-slate-700' : '' }}
+                                                        {{ $cycle->status === 'resolved' ? 'bg-emerald-100 text-emerald-800' : '' }}
+                                                        {{ $cycle->status === 'open' ? 'bg-blue-100 text-blue-800' : '' }}">
+                                                        {{ $cycle->status }}
+                                                    </span>
+                                                </td>
+                                                <td class="py-2.5 px-3 whitespace-nowrap text-slate-800 font-medium">
+                                                    {{ $cycle->opened_at ? $cycle->opened_at->format('d M Y H:i') : '—' }}
+                                                </td>
+                                                <td class="py-2.5 px-3 whitespace-nowrap text-slate-700">
+                                                    {{ $cycle->openedBy?->name ?? ($cycle->cycle_no === 1 ? 'Intake System' : 'Operations Manager') }}
+                                                </td>
+                                                <td class="py-2.5 px-3 text-slate-700 max-w-xs">
+                                                    @if($cycle->reopen_reason)
+                                                        <span class="text-amber-900 font-medium" title="{{ $cycle->reopen_reason }}">
+                                                            {{ $cycle->reopen_reason }}
+                                                        </span>
+                                                    @else
+                                                        <span class="text-slate-400 italic">Initial complaint logged</span>
+                                                    @endif
+                                                </td>
+                                                <td class="py-2.5 px-3 whitespace-nowrap text-slate-800">
+                                                    @if($cycle->closed_at)
+                                                        <div class="font-bold text-slate-900">{{ $cycle->closed_at->format('d M Y H:i') }}</div>
+                                                        <div class="text-[10px] text-slate-400">Closed by {{ $cycle->closedBy?->name ?? 'Admin' }}</div>
+                                                    @elseif($cycle->resolved_at)
+                                                        <div class="font-bold text-emerald-800">{{ $cycle->resolved_at->format('d M Y H:i') }}</div>
+                                                        <div class="text-[10px] text-slate-400">Resolved by {{ $cycle->resolvedBy?->name ?? 'Lead Engineer' }}</div>
+                                                    @else
+                                                        <span class="text-blue-700 font-bold flex items-center gap-1">
+                                                            <i class="fa-solid fa-spinner animate-spin text-[10px]"></i> Running
+                                                        </span>
+                                                    @endif
+                                                </td>
+                                                <td class="py-2.5 px-3 text-right whitespace-nowrap">
+                                                    <span class="font-mono font-bold text-slate-900">{{ $cycle->durationFormatted() }}</span>
+                                                    @if($cycle->sla_deadline)
+                                                        <div class="text-[10px] {{ $cycle->isInTat() ? 'text-emerald-700 font-semibold' : 'text-rose-700 font-bold' }}">
+                                                            {{ $cycle->isInTat() ? 'In-TAT' : 'Overdue' }} (Target: {{ $cycle->sla_deadline->format('d M H:i') }})
+                                                        </div>
+                                                    @endif
+                                                </td>
+                                            </tr>
+                                        @endforeach
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    @endif
 
                 </div>
             @empty

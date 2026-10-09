@@ -49,7 +49,7 @@
     <div id="sidebar-backdrop" onclick="toggleSidebar()" class="fixed inset-0 bg-slate-950/70 z-40 hidden md:hidden transition-opacity"></div>
 
     <!-- LEFT SIDEBAR -->
-    <aside id="app-sidebar" class="fixed md:sticky top-0 left-0 h-screen w-64 bg-slate-900 text-slate-300 flex flex-col justify-between shrink-0 z-50 border-r border-slate-800 shadow-2xl transition-transform duration-300 -translate-x-full md:translate-x-0 overflow-y-auto">
+    <aside id="app-sidebar" class="fixed md:sticky top-0 left-0 h-screen w-64 bg-slate-900 text-slate-100 flex flex-col justify-between shrink-0 z-50 border-r border-slate-800 shadow-2xl transition-transform duration-300 -translate-x-full md:translate-x-0 overflow-y-auto">
         <div>
             <!-- Sidebar Header / Logo -->
             <div class="h-16 px-4 flex items-center justify-between border-b border-slate-800 bg-slate-950">
@@ -70,15 +70,15 @@
             </div>
 
             <!-- User Info Card (Sidebar Top) -->
-            <div class="p-3 mx-3 my-3 bg-slate-800/80 rounded-xl border border-slate-700/60 flex items-center space-x-2.5 shadow-inner">
-                <div class="w-9 h-9 rounded-lg bg-sky-600/30 text-sky-400 border border-sky-500/40 flex items-center justify-center font-bold text-xs shrink-0">
+            <div class="p-3 mx-3 my-3 bg-slate-800/90 rounded-xl border border-slate-700/80 flex items-center space-x-2.5 shadow-inner">
+                <div class="w-9 h-9 rounded-lg bg-sky-600/40 text-sky-300 border border-sky-400/50 flex items-center justify-center font-bold text-xs shrink-0">
                     {{ strtoupper(substr(auth()->user()->name ?? 'U', 0, 2)) }}
                 </div>
                 <div class="flex-1 min-w-0">
                     <div class="text-xs font-bold text-white truncate">{{ auth()->user()->name }}</div>
                     <div class="flex items-center space-x-1.5 mt-0.5">
                         <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-                        <span class="text-[10px] text-slate-400 uppercase font-semibold font-mono tracking-wider">
+                        <span class="text-[10px] text-slate-300 uppercase font-semibold font-mono tracking-wider">
                             {{ str_replace('_', ' ', auth()->user()->role) }}
                         </span>
                     </div>
@@ -91,7 +91,7 @@
                 <!-- 1. DASHBOARD -->
                 @if(!auth()->user()->isOfficeStaff())
                 <div class="space-y-0.5">
-                    <a href="{{ route('dashboard') }}" class="flex items-center space-x-2.5 px-3 py-2 rounded-xl font-medium transition {{ request()->routeIs('dashboard') ? 'bg-sky-600 text-white shadow-md shadow-sky-900/40' : 'text-slate-300 hover:bg-slate-800 hover:text-white' }}">
+                    <a href="{{ route('dashboard') }}" class="flex items-center space-x-2.5 px-3 py-2 rounded-xl font-semibold transition {{ request()->routeIs('dashboard') ? 'bg-sky-600 text-white shadow-md shadow-sky-900/40' : 'text-slate-200 hover:bg-slate-800 hover:text-white' }}">
                         <i class="fa-solid fa-gauge-high w-4 text-center {{ request()->routeIs('dashboard') ? 'text-white' : 'text-sky-400' }}"></i>
                         <span class="flex-1">Dashboard</span>
                     </a>
@@ -120,10 +120,10 @@
                     $complaintsActive = request()->routeIs('tickets.*') || request()->routeIs('settings.email*');
                 @endphp
                 <details class="group" {{ $complaintsActive ? 'open' : '' }}>
-                    <summary class="cursor-pointer flex items-center justify-between px-3 py-2 rounded-xl text-slate-300 hover:bg-slate-800 hover:text-white transition font-medium list-none select-none {{ $complaintsActive ? 'bg-slate-800/80 text-white font-semibold' : '' }}">
+                    <summary class="cursor-pointer flex items-center justify-between px-3 py-2 rounded-xl text-slate-200 hover:bg-slate-800 hover:text-white transition font-semibold list-none select-none {{ $complaintsActive ? 'bg-slate-800/90 text-white font-bold border-l-2 border-indigo-400 pl-2.5' : '' }}">
                         <span class="flex items-center space-x-2.5">
                             <i class="fa-solid fa-ticket w-4 text-center text-indigo-400"></i>
-                            <span>Complaints</span>
+                            <span class="text-white">Complaints</span>
                         </span>
                         <div class="flex items-center space-x-1.5">
                             @if($complaintsBadgeCount > 0)
@@ -132,10 +132,18 @@
                             <i class="fa-solid fa-chevron-right text-[10px] text-slate-400 transition group-open:rotate-90"></i>
                         </div>
                     </summary>
-                    <div class="pl-7 pr-2 py-1 space-y-0.5 border-l border-slate-800 ml-5 mt-0.5">
+                    <div class="pl-7 pr-2 py-1 space-y-1 border-l-2 border-slate-700 ml-5 mt-1">
+                        @if(request()->routeIs('tickets.show') && isset($ticket))
+                        <!-- Current Open Ticket Context Pill -->
+                        <div class="px-2.5 py-1.5 text-xs font-bold text-sky-300 bg-sky-950/70 rounded-lg border border-sky-800/80 flex items-center gap-1.5 my-1 shadow-inner">
+                            <span class="w-2 h-2 rounded-full bg-sky-400 animate-pulse"></span>
+                            <span class="truncate">Ticket: #{{ $ticket->ticket_no }}</span>
+                        </div>
+                        @endif
+
                         @if(!$isOfficeStaffUser)
                         <!-- Complain Registry (Visible to Super Admin, Admin, Engineer) -->
-                        <a href="{{ route('tickets.index') }}" class="flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs {{ request()->routeIs('tickets.index') ? 'bg-slate-800 text-sky-400 font-bold' : 'text-slate-400 hover:text-white hover:bg-slate-800/60' }} transition">
+                        <a href="{{ route('tickets.index') }}" class="flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs {{ request()->routeIs('tickets.index') || (request()->routeIs('tickets.show') && !request()->routeIs('tickets.open')) ? 'bg-slate-800 text-sky-400 font-bold border-l-2 border-sky-400 pl-2' : 'text-slate-200 hover:text-white hover:bg-slate-800/80 font-medium' }} transition">
                             <span><i class="fa-solid fa-list-check mr-1.5 text-[10px]"></i> Complain Registry</span>
                             @if($isEngineerUser && $myComplaintsCount > 0)
                                 <span class="px-1.5 py-0.2 bg-sky-500 text-white font-bold text-[9px] rounded-full">{{ $myComplaintsCount }}</span>
@@ -145,7 +153,7 @@
 
                         @if(!$isEngineerUser)
                         <!-- Open Ticket (Visible to Super Admin, Admin, Office Staff) -->
-                        <a href="{{ route('tickets.open') }}" class="flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs {{ request()->routeIs('tickets.open') ? 'bg-slate-800 text-sky-400 font-bold' : 'text-slate-400 hover:text-white hover:bg-slate-800/60' }} transition">
+                        <a href="{{ route('tickets.open') }}" class="flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs {{ request()->routeIs('tickets.open') ? 'bg-slate-800 text-sky-400 font-bold border-l-2 border-sky-400 pl-2' : 'text-slate-200 hover:text-white hover:bg-slate-800/80 font-medium' }} transition">
                             <span><i class="fa-solid fa-clock-rotate-left mr-1.5 text-[10px]"></i> Open Tickets</span>
                             @if(isset($openCount) && $openCount > 0)
                                 <span class="px-1.5 py-0.2 bg-amber-500 text-slate-950 font-black text-[9px] rounded-full">{{ $openCount }}</span>
@@ -155,7 +163,7 @@
 
                         @if(!$isEngineerUser && !$isOfficeStaffUser)
                         <!-- Escalated Ticket (Visible to Super Admin, Admin) -->
-                        <a href="{{ route('tickets.escalations') }}" class="flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs {{ request()->routeIs('tickets.escalations') ? 'bg-slate-800 text-rose-400 font-bold' : 'text-slate-400 hover:text-white hover:bg-slate-800/60' }} transition">
+                        <a href="{{ route('tickets.escalations') }}" class="flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs {{ request()->routeIs('tickets.escalations') ? 'bg-slate-800 text-rose-400 font-bold border-l-2 border-rose-400 pl-2' : 'text-slate-200 hover:text-white hover:bg-slate-800/80 font-medium' }} transition">
                             <span><i class="fa-solid fa-triangle-exclamation mr-1.5 text-[10px]"></i> Escalated Tickets</span>
                             @if(isset($escCount) && $escCount > 0)
                                 <span class="px-1.5 py-0.2 bg-rose-500 text-white font-black text-[9px] rounded-full animate-pulse">{{ $escCount }}</span>
@@ -163,7 +171,7 @@
                         </a>
 
                         <!-- Mail Sync (Webmail & Ingest) (Visible to Super Admin, Admin) -->
-                        <a href="{{ route('settings.email') }}" class="flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs {{ request()->routeIs('settings.*') ? 'bg-slate-800 text-cyan-400 font-bold' : 'text-slate-400 hover:text-white hover:bg-slate-800/60' }} transition">
+                        <a href="{{ route('settings.email') }}" class="flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs {{ request()->routeIs('settings.*') ? 'bg-slate-800 text-cyan-400 font-bold border-l-2 border-cyan-400 pl-2' : 'text-slate-200 hover:text-white hover:bg-slate-800/80 font-medium' }} transition">
                             <span><i class="fa-solid fa-inbox mr-1.5 text-[10px]"></i> Mail Sync (Webmail &amp; Ingest)</span>
                             @if(isset($unassignedEmailCount) && $unassignedEmailCount > 0)
                                 <span class="px-1.5 py-0.2 bg-sky-500 text-white font-bold text-[9px] rounded-full">{{ $unassignedEmailCount }}</span>
@@ -180,10 +188,10 @@
                     $approvalsActive = request()->routeIs('approvals.*');
                 @endphp
                 <details class="group" {{ $approvalsActive ? 'open' : '' }}>
-                    <summary class="cursor-pointer flex items-center justify-between px-3 py-2 rounded-xl text-slate-300 hover:bg-slate-800 hover:text-white transition font-medium list-none select-none {{ $approvalsActive ? 'bg-slate-800/80 text-white font-semibold' : '' }}">
+                    <summary class="cursor-pointer flex items-center justify-between px-3 py-2 rounded-xl text-slate-200 hover:bg-slate-800 hover:text-white transition font-semibold list-none select-none {{ $approvalsActive ? 'bg-slate-800/90 text-white font-bold border-l-2 border-amber-400 pl-2.5' : '' }}">
                         <span class="flex items-center space-x-2.5">
                             <i class="fa-solid fa-hourglass-half w-4 text-center text-amber-400"></i>
-                            <span>Waited Approval</span>
+                            <span class="text-white">Waited Approval</span>
                         </span>
                         <div class="flex items-center space-x-1.5">
                             @if($approvalCount > 0)
@@ -192,8 +200,8 @@
                             <i class="fa-solid fa-chevron-right text-[10px] text-slate-400 transition group-open:rotate-90"></i>
                         </div>
                     </summary>
-                    <div class="pl-7 pr-2 py-1 space-y-0.5 border-l border-slate-800 ml-5 mt-0.5">
-                        <a href="{{ route('approvals.index') }}" class="flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs {{ request()->routeIs('approvals.*') ? 'bg-slate-800 text-amber-400 font-bold' : 'text-slate-400 hover:text-white hover:bg-slate-800/60' }} transition">
+                    <div class="pl-7 pr-2 py-1 space-y-1 border-l-2 border-slate-700 ml-5 mt-1">
+                        <a href="{{ route('approvals.index') }}" class="flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs {{ request()->routeIs('approvals.*') ? 'bg-slate-800 text-amber-400 font-bold border-l-2 border-amber-400 pl-2' : 'text-slate-200 hover:text-white hover:bg-slate-800/80 font-medium' }} transition">
                             <span><i class="fa-solid fa-clock-rotate-left mr-1.5 text-[10px]"></i> Pending Approvals</span>
                             @if($approvalCount > 0)
                                 <span class="px-1.5 py-0.2 bg-amber-500 text-slate-950 font-black text-[9px] rounded-full">{{ $approvalCount }}</span>
@@ -208,10 +216,10 @@
                     $workshopActive = request()->routeIs('workshop.*');
                 @endphp
                 <details class="group" {{ $workshopActive ? 'open' : '' }}>
-                    <summary class="cursor-pointer flex items-center justify-between px-3 py-2 rounded-xl text-slate-300 hover:bg-slate-800 hover:text-white transition font-medium list-none select-none {{ $workshopActive ? 'bg-slate-800/80 text-white font-semibold' : '' }}">
+                    <summary class="cursor-pointer flex items-center justify-between px-3 py-2 rounded-xl text-slate-200 hover:bg-slate-800 hover:text-white transition font-semibold list-none select-none {{ $workshopActive ? 'bg-slate-800/90 text-white font-bold border-l-2 border-purple-400 pl-2.5' : '' }}">
                         <span class="flex items-center space-x-2.5">
                             <i class="fa-solid fa-truck-ramp-box w-4 text-center text-purple-400"></i>
-                            <span>Workshop Management</span>
+                            <span class="text-white">Workshop Management</span>
                         </span>
                         <div class="flex items-center space-x-1.5">
                             @if($workshopCount > 0)
@@ -220,8 +228,8 @@
                             <i class="fa-solid fa-chevron-right text-[10px] text-slate-400 transition group-open:rotate-90"></i>
                         </div>
                     </summary>
-                    <div class="pl-7 pr-2 py-1 space-y-0.5 border-l border-slate-800 ml-5 mt-0.5">
-                        <a href="{{ route('workshop.index') }}" class="flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs {{ request()->routeIs('workshop.*') ? 'bg-slate-800 text-purple-400 font-bold' : 'text-slate-400 hover:text-white hover:bg-slate-800/60' }} transition">
+                    <div class="pl-7 pr-2 py-1 space-y-1 border-l-2 border-slate-700 ml-5 mt-1">
+                        <a href="{{ route('workshop.index') }}" class="flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs {{ request()->routeIs('workshop.*') ? 'bg-slate-800 text-purple-400 font-bold border-l-2 border-purple-400 pl-2' : 'text-slate-200 hover:text-white hover:bg-slate-800/80 font-medium' }} transition">
                             <span><i class="fa-solid fa-wrench mr-1.5 text-[10px]"></i> Central Workshop</span>
                             @if($workshopCount > 0)
                                 <span class="px-1.5 py-0.2 bg-purple-500 text-white font-black text-[9px] rounded-full">{{ $workshopCount }}</span>
@@ -237,22 +245,22 @@
                     $fieldActive = request()->routeIs('expenses.*') || request()->routeIs('engineers.*');
                 @endphp
                 <details class="group" {{ $fieldActive ? 'open' : '' }}>
-                    <summary class="cursor-pointer flex items-center justify-between px-3 py-2 rounded-xl text-slate-300 hover:bg-slate-800 hover:text-white transition font-medium list-none select-none {{ $fieldActive ? 'bg-slate-800/80 text-white font-semibold' : '' }}">
+                    <summary class="cursor-pointer flex items-center justify-between px-3 py-2 rounded-xl text-slate-200 hover:bg-slate-800 hover:text-white transition font-semibold list-none select-none {{ $fieldActive ? 'bg-slate-800/90 text-white font-bold border-l-2 border-emerald-400 pl-2.5' : '' }}">
                         <span class="flex items-center space-x-2.5">
                             <i class="fa-solid fa-money-bill-transfer w-4 text-center text-emerald-400"></i>
-                            <span>Field &amp; Disbursements</span>
+                            <span class="text-white">Field &amp; Disbursements</span>
                         </span>
                         <i class="fa-solid fa-chevron-right text-[10px] text-slate-400 transition group-open:rotate-90"></i>
                     </summary>
-                    <div class="pl-7 pr-2 py-1 space-y-0.5 border-l border-slate-800 ml-5 mt-0.5">
+                    <div class="pl-7 pr-2 py-1 space-y-1 border-l-2 border-slate-700 ml-5 mt-1">
                         <!-- Tour Expenses -->
-                        <a href="{{ route('expenses.index') }}" class="flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs {{ request()->routeIs('expenses.*') ? 'bg-slate-800 text-emerald-400 font-bold' : 'text-slate-400 hover:text-white hover:bg-slate-800/60' }} transition">
+                        <a href="{{ route('expenses.index') }}" class="flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs {{ request()->routeIs('expenses.*') ? 'bg-slate-800 text-emerald-400 font-bold border-l-2 border-emerald-400 pl-2' : 'text-slate-200 hover:text-white hover:bg-slate-800/80 font-medium' }} transition">
                             <span><i class="fa-solid fa-receipt mr-1.5 text-[10px]"></i> Tour Expenses</span>
                         </a>
 
                         @if(!auth()->user()->isEngineer())
                         <!-- Engineers Directory -->
-                        <a href="{{ route('engineers.index') }}" class="flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs {{ request()->routeIs('engineers.*') ? 'bg-slate-800 text-sky-400 font-bold' : 'text-slate-400 hover:text-white hover:bg-slate-800/60' }} transition">
+                        <a href="{{ route('engineers.index') }}" class="flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs {{ request()->routeIs('engineers.*') ? 'bg-slate-800 text-sky-400 font-bold border-l-2 border-sky-400 pl-2' : 'text-slate-200 hover:text-white hover:bg-slate-800/80 font-medium' }} transition">
                             <span><i class="fa-solid fa-user-gear mr-1.5 text-[10px]"></i> Engineer Directory</span>
                         </a>
                         @endif
@@ -286,10 +294,10 @@
                     $pmActive = request()->routeIs('pm.*');
                 @endphp
                 <details class="group" {{ $pmActive ? 'open' : '' }}>
-                    <summary class="cursor-pointer flex items-center justify-between px-3 py-2 rounded-xl text-slate-300 hover:bg-slate-800 hover:text-white transition font-medium list-none select-none {{ $pmActive ? 'bg-slate-800/80 text-white font-semibold' : '' }}">
+                    <summary class="cursor-pointer flex items-center justify-between px-3 py-2 rounded-xl text-slate-200 hover:bg-slate-800 hover:text-white transition font-semibold list-none select-none {{ $pmActive ? 'bg-slate-800/90 text-white font-bold border-l-2 border-teal-400 pl-2.5' : '' }}">
                         <span class="flex items-center space-x-2.5">
                             <i class="fa-solid fa-screwdriver-wrench w-4 text-center text-teal-400"></i>
-                            <span>Preventive Maintenance</span>
+                            <span class="text-white">Preventive Maintenance</span>
                         </span>
                         <div class="flex items-center space-x-1.5">
                             @if($pmAlertCount > 0)
@@ -298,19 +306,19 @@
                             <i class="fa-solid fa-chevron-right text-[10px] text-slate-400 transition group-open:rotate-90"></i>
                         </div>
                     </summary>
-                    <div class="pl-7 pr-2 py-1 space-y-0.5 border-l border-slate-800 ml-5 mt-0.5">
+                    <div class="pl-7 pr-2 py-1 space-y-1 border-l-2 border-slate-700 ml-5 mt-1">
                         @if(auth()->user()->isEngineer())
-                        <a href="{{ route('pm.tasks.index') }}" class="flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs {{ request()->routeIs('pm.tasks.*') ? 'bg-slate-800 text-teal-400 font-bold' : 'text-slate-400 hover:text-white hover:bg-slate-800/60' }} transition">
+                        <a href="{{ route('pm.tasks.index') }}" class="flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs {{ request()->routeIs('pm.tasks.*') ? 'bg-slate-800 text-teal-400 font-bold border-l-2 border-teal-400 pl-2' : 'text-slate-200 hover:text-white hover:bg-slate-800/80 font-medium' }} transition">
                             <span><i class="fa-solid fa-wrench mr-1.5 text-[10px]"></i> My PM Tasks</span>
                             @if($pmAlertCount > 0)
                                 <span class="px-1.5 py-0.2 font-black text-[9px] rounded-full {{ $pmOverdueCount > 0 ? 'bg-red-500 text-white animate-pulse' : 'bg-teal-500 text-white' }}">{{ $pmAlertCount }}</span>
                             @endif
                         </a>
                         @else
-                        <a href="{{ route('pm.machines.index') }}" class="flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs {{ request()->routeIs('pm.machines.*') ? 'bg-slate-800 text-teal-400 font-bold' : 'text-slate-400 hover:text-white hover:bg-slate-800/60' }} transition">
+                        <a href="{{ route('pm.machines.index') }}" class="flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs {{ request()->routeIs('pm.machines.*') ? 'bg-slate-800 text-teal-400 font-bold border-l-2 border-teal-400 pl-2' : 'text-slate-200 hover:text-white hover:bg-slate-800/80 font-medium' }} transition">
                             <span><i class="fa-solid fa-desktop mr-1.5 text-[10px]"></i> Machine Registry</span>
                         </a>
-                        <a href="{{ route('pm.schedules.index') }}" class="flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs {{ request()->routeIs('pm.schedules.*') ? 'bg-slate-800 text-teal-400 font-bold' : 'text-slate-400 hover:text-white hover:bg-slate-800/60' }} transition">
+                        <a href="{{ route('pm.schedules.index') }}" class="flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs {{ request()->routeIs('pm.schedules.*') ? 'bg-slate-800 text-teal-400 font-bold border-l-2 border-teal-400 pl-2' : 'text-slate-200 hover:text-white hover:bg-slate-800/80 font-medium' }} transition">
                             <span><i class="fa-solid fa-calendar-check mr-1.5 text-[10px]"></i> PM Schedules</span>
                             @if($pmAlertCount > 0)
                                 <span class="px-1.5 py-0.2 font-black text-[9px] rounded-full {{ $pmOverdueCount > 0 ? 'bg-red-500 text-white animate-pulse' : 'bg-teal-500 text-white' }}">{{ $pmAlertCount }}</span>
@@ -332,10 +340,10 @@
                     $partsActive = request()->routeIs('parts.*');
                 @endphp
                 <details class="group" {{ $partsActive ? 'open' : '' }}>
-                    <summary class="cursor-pointer flex items-center justify-between px-3 py-2 rounded-xl text-slate-300 hover:bg-slate-800 hover:text-white transition font-medium list-none select-none {{ $partsActive ? 'bg-slate-800/80 text-white font-semibold' : '' }}">
+                    <summary class="cursor-pointer flex items-center justify-between px-3 py-2 rounded-xl text-slate-200 hover:bg-slate-800 hover:text-white transition font-semibold list-none select-none {{ $partsActive ? 'bg-slate-800/90 text-white font-bold border-l-2 border-amber-400 pl-2.5' : '' }}">
                         <span class="flex items-center space-x-2.5">
                             <i class="fa-solid fa-boxes-stacked w-4 text-center text-amber-400"></i>
-                            <span>Parts &amp; Inventory</span>
+                            <span class="text-white">Parts &amp; Inventory</span>
                         </span>
                         <div class="flex items-center space-x-1.5">
                             @if($pendingPrCount > 0)
@@ -344,9 +352,9 @@
                             <i class="fa-solid fa-chevron-right text-[10px] text-slate-400 transition group-open:rotate-90"></i>
                         </div>
                     </summary>
-                    <div class="pl-7 pr-2 py-1 space-y-0.5 border-l border-slate-800 ml-5 mt-0.5">
+                    <div class="pl-7 pr-2 py-1 space-y-1 border-l-2 border-slate-700 ml-5 mt-1">
                         <!-- Part Requests -->
-                        <a href="{{ route('parts.requests.index') }}" class="flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs {{ request()->routeIs('parts.requests.*') ? 'bg-slate-800 text-amber-400 font-bold' : 'text-slate-400 hover:text-white hover:bg-slate-800/60' }} transition">
+                        <a href="{{ route('parts.requests.index') }}" class="flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs {{ request()->routeIs('parts.requests.*') ? 'bg-slate-800 text-amber-400 font-bold border-l-2 border-amber-400 pl-2' : 'text-slate-200 hover:text-white hover:bg-slate-800/80 font-medium' }} transition">
                             <span><i class="fa-solid fa-clipboard-list mr-1.5 text-[10px]"></i> Part Requests</span>
                             @if($pendingPrCount > 0)
                                 <span class="px-1.5 py-0.2 bg-amber-500 text-slate-950 font-black text-[9px] rounded-full">{{ $pendingPrCount }}</span>
@@ -354,7 +362,7 @@
                         </a>
 
                         <!-- Advance Envelopes -->
-                        <a href="{{ route('parts.envelopes.index') }}" class="flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs {{ request()->routeIs('parts.envelopes.*') ? 'bg-slate-800 text-teal-400 font-bold' : 'text-slate-400 hover:text-white hover:bg-slate-800/60' }} transition">
+                        <a href="{{ route('parts.envelopes.index') }}" class="flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs {{ request()->routeIs('parts.envelopes.*') ? 'bg-slate-800 text-teal-400 font-bold border-l-2 border-teal-400 pl-2' : 'text-slate-200 hover:text-white hover:bg-slate-800/80 font-medium' }} transition">
                             <span><i class="fa-solid fa-briefcase mr-1.5 text-[10px]"></i> {{ auth()->user()->isEngineer() ? 'My Parts Envelope' : 'Advance Envelopes' }}</span>
                             @if($envStockCount > 0)
                                 <span class="px-1.5 py-0.2 bg-teal-500 text-slate-950 font-bold text-[9px] rounded-full">{{ $envStockCount }}</span>
@@ -363,31 +371,31 @@
 
                         @if(!auth()->user()->isEngineer())
                         <!-- Stock Levels -->
-                        <a href="{{ route('parts.stock.index') }}" class="flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs {{ request()->routeIs('parts.stock.*') ? 'bg-slate-800 text-emerald-400 font-bold' : 'text-slate-400 hover:text-white hover:bg-slate-800/60' }} transition">
+                        <a href="{{ route('parts.stock.index') }}" class="flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs {{ request()->routeIs('parts.stock.*') ? 'bg-slate-800 text-emerald-400 font-bold border-l-2 border-emerald-400 pl-2' : 'text-slate-200 hover:text-white hover:bg-slate-800/80 font-medium' }} transition">
                             <span><i class="fa-solid fa-boxes-stacked mr-1.5 text-[10px]"></i> Stock Levels</span>
                         </a>
 
                         <!-- Goods Received (GRN) -->
-                        <a href="{{ route('parts.grn.index') }}" class="flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs {{ request()->routeIs('parts.grn.*') ? 'bg-slate-800 text-blue-400 font-bold' : 'text-slate-400 hover:text-white hover:bg-slate-800/60' }} transition">
+                        <a href="{{ route('parts.grn.index') }}" class="flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs {{ request()->routeIs('parts.grn.*') ? 'bg-slate-800 text-blue-400 font-bold border-l-2 border-blue-400 pl-2' : 'text-slate-200 hover:text-white hover:bg-slate-800/80 font-medium' }} transition">
                             <span><i class="fa-solid fa-file-invoice mr-1.5 text-[10px]"></i> Goods Received (GRN)</span>
                         </a>
 
                         <!-- Location Transfers -->
-                        <a href="{{ route('parts.transfers.index') }}" class="flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs {{ request()->routeIs('parts.transfers.*') ? 'bg-slate-800 text-purple-400 font-bold' : 'text-slate-400 hover:text-white hover:bg-slate-800/60' }} transition">
+                        <a href="{{ route('parts.transfers.index') }}" class="flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs {{ request()->routeIs('parts.transfers.*') ? 'bg-slate-800 text-purple-400 font-bold border-l-2 border-purple-400 pl-2' : 'text-slate-200 hover:text-white hover:bg-slate-800/80 font-medium' }} transition">
                             <span><i class="fa-solid fa-truck-ramp-box mr-1.5 text-[10px]"></i> Location Transfers</span>
                         </a>
 
                         @if(auth()->user()->isAdmin())
                         <!-- Master Catalog -->
-                        <div class="pt-1 mt-1 border-t border-slate-800/80">
-                            <div class="px-2.5 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Master Catalog</div>
-                            <a href="{{ route('parts.master.parts') }}" class="flex items-center px-2.5 py-1.5 rounded-lg text-xs {{ request()->routeIs('parts.master.parts*') ? 'bg-slate-800 text-sky-400 font-bold' : 'text-slate-400 hover:text-white hover:bg-slate-800/60' }} transition">
+                        <div class="pt-1 mt-1 border-t border-slate-700">
+                            <div class="px-2.5 py-1 text-[10px] font-bold text-slate-300 uppercase tracking-wider">Master Catalog</div>
+                            <a href="{{ route('parts.master.parts') }}" class="flex items-center px-2.5 py-1.5 rounded-lg text-xs {{ request()->routeIs('parts.master.parts*') ? 'bg-slate-800 text-sky-400 font-bold border-l-2 border-sky-400 pl-2' : 'text-slate-200 hover:text-white hover:bg-slate-800/80 font-medium' }} transition">
                                 <i class="fa-solid fa-barcode mr-1.5 text-[10px]"></i> Parts Catalog
                             </a>
-                            <a href="{{ route('parts.master.models') }}" class="flex items-center px-2.5 py-1.5 rounded-lg text-xs {{ request()->routeIs('parts.master.models*') ? 'bg-slate-800 text-sky-400 font-bold' : 'text-slate-400 hover:text-white hover:bg-slate-800/60' }} transition">
+                            <a href="{{ route('parts.master.models') }}" class="flex items-center px-2.5 py-1.5 rounded-lg text-xs {{ request()->routeIs('parts.master.models*') ? 'bg-slate-800 text-sky-400 font-bold border-l-2 border-sky-400 pl-2' : 'text-slate-200 hover:text-white hover:bg-slate-800/80 font-medium' }} transition">
                                 <i class="fa-solid fa-server mr-1.5 text-[10px]"></i> Machine Models
                             </a>
-                            <a href="{{ route('parts.master.locations') }}" class="flex items-center px-2.5 py-1.5 rounded-lg text-xs {{ request()->routeIs('parts.master.locations*') ? 'bg-slate-800 text-sky-400 font-bold' : 'text-slate-400 hover:text-white hover:bg-slate-800/60' }} transition">
+                            <a href="{{ route('parts.master.locations') }}" class="flex items-center px-2.5 py-1.5 rounded-lg text-xs {{ request()->routeIs('parts.master.locations*') ? 'bg-slate-800 text-sky-400 font-bold border-l-2 border-sky-400 pl-2' : 'text-slate-200 hover:text-white hover:bg-slate-800/80 font-medium' }} transition">
                                 <i class="fa-solid fa-location-dot mr-1.5 text-[10px]"></i> Office Hubs
                             </a>
                         </div>
@@ -402,22 +410,22 @@
                     $reportsActive = request()->routeIs('reports.*');
                 @endphp
                 <details class="group" {{ $reportsActive ? 'open' : '' }}>
-                    <summary class="cursor-pointer flex items-center justify-between px-3 py-2 rounded-xl text-slate-300 hover:bg-slate-800 hover:text-white transition font-medium list-none select-none {{ $reportsActive ? 'bg-slate-800/80 text-white font-semibold' : '' }}">
+                    <summary class="cursor-pointer flex items-center justify-between px-3 py-2 rounded-xl text-slate-200 hover:bg-slate-800 hover:text-white transition font-semibold list-none select-none {{ $reportsActive ? 'bg-slate-800/90 text-white font-bold border-l-2 border-sky-400 pl-2.5' : '' }}">
                         <span class="flex items-center space-x-2.5">
                             <i class="fa-solid fa-chart-pie w-4 text-center text-sky-400"></i>
-                            <span>Reports</span>
+                            <span class="text-white">Reports</span>
                         </span>
                         <i class="fa-solid fa-chevron-right text-[10px] text-slate-400 transition group-open:rotate-90"></i>
                     </summary>
-                    <div class="pl-7 pr-2 py-1 space-y-0.5 border-l border-slate-800 ml-5 mt-0.5">
+                    <div class="pl-7 pr-2 py-1 space-y-1 border-l-2 border-slate-700 ml-5 mt-1">
                         @if(auth()->user()->isOfficeStaff())
                         <!-- Office Staff only gets Machine Faults Report -->
-                        <a href="{{ route('reports.index', ['tab' => 'machine_faults']) }}" class="flex items-center px-2.5 py-1.5 rounded-lg text-xs {{ request()->routeIs('reports.*') ? 'bg-slate-800 text-sky-400 font-bold' : 'text-slate-400 hover:text-white hover:bg-slate-800/60' }} transition">
+                        <a href="{{ route('reports.index', ['tab' => 'machine_faults']) }}" class="flex items-center px-2.5 py-1.5 rounded-lg text-xs {{ request()->routeIs('reports.*') ? 'bg-slate-800 text-sky-400 font-bold border-l-2 border-sky-400 pl-2' : 'text-slate-200 hover:text-white hover:bg-slate-800/80 font-medium' }} transition">
                             <i class="fa-solid fa-video mr-1.5 text-[10px]"></i> Machine Faults Report
                         </a>
                         @else
                         <!-- Reports & Analytics for Admins/Superiors -->
-                        <a href="{{ route('reports.index') }}" class="flex items-center px-2.5 py-1.5 rounded-lg text-xs {{ request()->routeIs('reports.*') ? 'bg-slate-800 text-sky-400 font-bold' : 'text-slate-400 hover:text-white hover:bg-slate-800/60' }} transition">
+                        <a href="{{ route('reports.index') }}" class="flex items-center px-2.5 py-1.5 rounded-lg text-xs {{ request()->routeIs('reports.*') ? 'bg-slate-800 text-sky-400 font-bold border-l-2 border-sky-400 pl-2' : 'text-slate-200 hover:text-white hover:bg-slate-800/80 font-medium' }} transition">
                             <i class="fa-solid fa-chart-line mr-1.5 text-[10px]"></i> Reports &amp; Analytics
                         </a>
                         @endif
@@ -431,15 +439,15 @@
                     $adminActive = request()->routeIs('users.*');
                 @endphp
                 <details class="group" {{ $adminActive ? 'open' : '' }}>
-                    <summary class="cursor-pointer flex items-center justify-between px-3 py-2 rounded-xl text-slate-300 hover:bg-slate-800 hover:text-white transition font-medium list-none select-none {{ $adminActive ? 'bg-slate-800/80 text-white font-semibold' : '' }}">
+                    <summary class="cursor-pointer flex items-center justify-between px-3 py-2 rounded-xl text-slate-200 hover:bg-slate-800 hover:text-white transition font-semibold list-none select-none {{ $adminActive ? 'bg-slate-800/90 text-white font-bold border-l-2 border-amber-400 pl-2.5' : '' }}">
                         <span class="flex items-center space-x-2.5">
                             <i class="fa-solid fa-users-gear w-4 text-center text-amber-400"></i>
-                            <span>Administration</span>
+                            <span class="text-white">Administration</span>
                         </span>
                         <i class="fa-solid fa-chevron-right text-[10px] text-slate-400 transition group-open:rotate-90"></i>
                     </summary>
-                    <div class="pl-7 pr-2 py-1 space-y-0.5 border-l border-slate-800 ml-5 mt-0.5">
-                        <a href="{{ route('users.index') }}" class="flex items-center px-2.5 py-1.5 rounded-lg text-xs {{ request()->routeIs('users.*') ? 'bg-slate-800 text-amber-400 font-bold' : 'text-slate-400 hover:text-white hover:bg-slate-800/60' }} transition">
+                    <div class="pl-7 pr-2 py-1 space-y-1 border-l-2 border-slate-700 ml-5 mt-1">
+                        <a href="{{ route('users.index') }}" class="flex items-center px-2.5 py-1.5 rounded-lg text-xs {{ request()->routeIs('users.*') ? 'bg-slate-800 text-amber-400 font-bold border-l-2 border-amber-400 pl-2' : 'text-slate-200 hover:text-white hover:bg-slate-800/80 font-medium' }} transition">
                             <i class="fa-solid fa-user-shield mr-1.5 text-[10px]"></i> User Management
                         </a>
                     </div>
@@ -453,7 +461,7 @@
             <!-- Logout Button -->
             <form action="{{ route('logout') }}" method="POST">
                 @csrf
-                <button type="submit" class="w-full flex items-center justify-center space-x-2 px-3 py-1.5 bg-slate-800/80 hover:bg-rose-900/60 hover:text-rose-200 text-slate-400 rounded-lg text-xs font-semibold transition border border-slate-700/60">
+                <button type="submit" class="w-full flex items-center justify-center space-x-2 px-3 py-1.5 bg-slate-800 hover:bg-rose-900/60 hover:text-rose-100 text-slate-200 rounded-lg text-xs font-semibold transition border border-slate-700/80">
                     <i class="fa-solid fa-arrow-right-from-bracket text-xs"></i>
                     <span>Sign Out</span>
                 </button>

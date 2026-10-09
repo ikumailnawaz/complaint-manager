@@ -356,6 +356,7 @@
                                 <th class="py-3 px-4">Linked Complaint Ticket</th>
                                 <th class="py-3 px-4">Route &amp; AI Distance</th>
                                 <th class="py-3 px-4">Amount Claimed</th>
+                                <th class="py-3 px-4">Applied Rate</th>
                                 <th class="py-3 px-3 text-center">Voucher File</th>
                                 <th class="py-3 px-3 text-center">Status</th>
                                 <th class="py-3 px-4 text-right">Audit &amp; Pay</th>
@@ -395,11 +396,22 @@
                                         <div class="text-[10px] text-slate-500 mt-0.5">{{ $c->engineer?->base_city }} &bull; {{ $c->engineer?->phone_whatsapp }}</div>
                                     </td>
 
-                                    <!-- Linked Ticket -->
+                                    <!-- Linked Ticket & Tour Badge -->
                                     <td class="py-3 px-4">
-                                        <a href="{{ route('tickets.show', $c->ticket) }}" class="font-bold text-sky-600 hover:underline">
-                                            {{ $c->ticket?->ticket_no }}
-                                        </a>
+                                        <div class="flex items-center space-x-1.5 flex-wrap">
+                                            <a href="{{ route('tickets.show', $c->ticket) }}" class="font-bold text-sky-600 hover:underline">
+                                                {{ $c->ticket?->ticket_no }}
+                                            </a>
+                                            @if(($c->tour_no ?? 1) > 1 || ($c->ticket?->current_cycle_no ?? 1) > 1)
+                                                <span class="inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-black bg-purple-100 text-purple-800 border border-purple-200" title="Tour {{ $c->tour_no ?? 1 }} on reopened ticket">
+                                                    Tour {{ $c->tour_no ?? 1 }} (Reopened)
+                                                </span>
+                                            @else
+                                                <span class="inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-medium bg-slate-100 text-slate-600">
+                                                    Tour 1
+                                                </span>
+                                            @endif
+                                        </div>
                                         <div class="text-[11px] text-slate-600 mt-0.5">{{ $c->ticket?->bank_name }}</div>
                                         <div class="text-[10px] text-slate-400">{{ $c->ticket?->branch_location }}</div>
                                     </td>
@@ -418,6 +430,20 @@
                                         <div class="font-extrabold text-slate-900 text-sm">PKR {{ number_format($c->claimed_amount, 2) }}</div>
                                         @if($c->suggested_amount)
                                             <div class="text-[10px] text-slate-400 mt-0.5">Rate guide: PKR {{ number_format($c->suggested_amount, 2) }}</div>
+                                        @endif
+                                    </td>
+
+                                    <!-- Applied Rate (Claimed Amount / AI Distance KM) -->
+                                    <td class="py-3 px-4 whitespace-nowrap">
+                                        @if($c->applied_rate !== null)
+                                            <div class="font-bold text-slate-800 text-xs">
+                                                PKR {{ number_format($c->applied_rate, 2) }} <span class="text-slate-500 font-normal text-[10px]">/ km</span>
+                                            </div>
+                                            <div class="text-[10px] text-slate-400 mt-0.5">
+                                                PKR {{ number_format($c->claimed_amount, 0) }} &divide; {{ number_format($c->ai_distance_km, 1) }} km
+                                            </div>
+                                        @else
+                                            <span class="text-slate-400 text-xs italic">N/A</span>
                                         @endif
                                     </td>
 
@@ -456,7 +482,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="9" class="py-12 text-center text-slate-400 text-xs">
+                                    <td colspan="10" class="py-12 text-center text-slate-400 text-xs">
                                         <i class="fa-solid fa-receipt text-3xl text-slate-300 mb-2 block"></i>
                                         No tour expense claims found matching current criteria.
                                     </td>

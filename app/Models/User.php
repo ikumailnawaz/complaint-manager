@@ -69,6 +69,15 @@ class User extends Authenticatable
         return $this->isSuperior();
     }
 
+    /** Only managers/admins may reopen a resolved or closed ticket (never engineers or office staff). */
+    public function canReopenTickets(): bool
+    {
+        return in_array($this->role, [
+            'super_admin', 'admin', 'manager', 'operations_manager', 'operation_manager',
+            'operations_admin', 'ops', 'supervisor', 'superior',
+        ], true);
+    }
+
     public function isEngineer(): bool
     {
         return $this->role === 'engineer';

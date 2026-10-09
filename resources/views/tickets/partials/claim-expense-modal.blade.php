@@ -1,5 +1,5 @@
 <!-- Quick Claim Expense Modal for Completed Tickets -->
-<div id="ticketClaimExpenseModal" class="hidden fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+<div id="ticketClaimExpenseModal" style="display: none;" class="hidden fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
     <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full border border-slate-200 overflow-hidden transform transition-all">
         <!-- Header -->
         <div class="bg-emerald-600 px-6 py-4 text-white flex items-center justify-between">
@@ -230,6 +230,7 @@ function openTicketClaimExpenseModal(ticketId, ticketNo, bankName, branchCity, e
 
     const modal = document.getElementById('ticketClaimExpenseModal');
     if (modal) {
+        modal.style.display = 'flex';
         modal.classList.remove('hidden');
     }
 }
@@ -237,6 +238,7 @@ function openTicketClaimExpenseModal(ticketId, ticketNo, bankName, branchCity, e
 function closeTicketClaimExpenseModal() {
     const modal = document.getElementById('ticketClaimExpenseModal');
     if (modal) {
+        modal.style.display = 'none';
         modal.classList.add('hidden');
     }
     isVoucherUploading = false;

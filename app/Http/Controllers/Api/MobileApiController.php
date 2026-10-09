@@ -103,12 +103,12 @@ class MobileApiController extends Controller
         $user = $request->user();
 
         $activeTicketsCount = Ticket::where(function ($q) use ($user) {
-            $q->where('assigned_engineer_id', $user->id)
+            $q->forEngineer($user->id)
               ->orWhere('original_field_engineer_id', $user->id);
         })->whereNotIn('status', ['resolved', 'closed'])->count();
 
         $resolvedTicketsCount = Ticket::where(function ($q) use ($user) {
-            $q->where('assigned_engineer_id', $user->id)
+            $q->forEngineer($user->id)
               ->orWhere('original_field_engineer_id', $user->id);
         })->whereIn('status', ['resolved', 'closed'])->count();
 
@@ -150,7 +150,7 @@ class MobileApiController extends Controller
         $search = $request->input('search');
 
         $query = Ticket::where(function ($q) use ($user) {
-            $q->where('assigned_engineer_id', $user->id)
+            $q->forEngineer($user->id)
               ->orWhere('original_field_engineer_id', $user->id);
         });
 
@@ -217,7 +217,7 @@ class MobileApiController extends Controller
             $q->latest('day_number');
         }, 'partRequests.items.part', 'expenseClaims'])->findOrFail($id);
 
-        if ($user->isEngineer() && $ticket->assigned_engineer_id !== $user->id && $ticket->original_field_engineer_id !== $user->id) {
+        if ($user->isEngineer() && !$ticket->hasEngineer($user) && $ticket->original_field_engineer_id !== $user->id) {
             return response()->json(['success' => false, 'message' => 'Unauthorized access to this complaint.'], 403);
         }
 
@@ -244,9 +244,31 @@ class MobileApiController extends Controller
                 'sla_deadline'       => $ticket->sla_deadline?->format('d M Y, h:i A'),
                 'is_sla_breached'    => $ticket->sla_deadline ? $ticket->sla_deadline->isPast() && !in_array($ticket->status, ['resolved', 'closed']) : false,
                 'can_claim_expense'  => $ticket->canClaimExpense($user->id),
-                'has_active_expense' => $ticket->hasActiveExpenseClaim(),
+                'has_active_expense' => $ticket->hasActiveExpenseClaim($user->id),
                 'supporting_doc_url' => $ticket->supporting_document ? asset('storage/' . $ticket->supporting_document) : null,
                 'resolution_summary' => $ticket->resolution_summary,
+                'current_tour'       => (int) ($ticket->current_cycle_no ?: 1),
+                'reopen_count'       => (int) $ticket->reopen_count,
+                'is_lead_engineer'   => $ticket->isLeadEngineer($user),
+                'engineers'          => $ticket->activeTicketEngineers()->with('engineer:id,name,phone_whatsapp')->get()->map(fn ($te) => [
+                    'id'   => $te->engineer_id,
+                    'name' => $te->engineer?->name,
+                    'role' => $te->role,
+                ])->values(),
+                'tours'              => $ticket->cycles()->get()->map(fn ($c) => [
+                    'tour'          => $c->cycle_no,
+                    'status'        => $c->status,
+                    'opened_at'     => $c->opened_at?->format('d M Y, h:i A'),
+                    'resolved_at'   => $c->resolved_at?->format('d M Y, h:i A'),
+                    'closed_at'     => $c->closed_at?->format('d M Y, h:i A'),
+                    'reopen_reason' => $c->reopen_reason,
+                ])->values(),
+                'documents'          => $ticket->documents()->get()->map(fn ($d) => [
+                    'tour' => $d->cycle?->cycle_no,
+                    'name' => $d->name,
+                    'url'  => asset('storage/' . $d->path),
+                    'uploaded_at' => $d->uploaded_at?->format('d M Y, h:i A'),
+                ])->values(),
                 'feedbacks'          => $ticket->feedbacks->map(function ($f) {
                     return [
                         'id'             => $f->id,
@@ -301,7 +323,7 @@ class MobileApiController extends Controller
         $user = $request->user();
         $ticket = Ticket::findOrFail($id);
 
-        if ($user->isEngineer() && $ticket->assigned_engineer_id !== $user->id) {
+        if ($user->isEngineer() && !$ticket->hasEngineer($user)) {
             return response()->json(['success' => false, 'message' => 'You are not assigned to this complaint.'], 403);
         }
 
@@ -331,7 +353,10 @@ class MobileApiController extends Controller
         $todayDate = Carbon::today();
         $calendarDay = max(1, (int) $ticketStartDate->diffInDays($todayDate) + 1);
 
+        $currentCycleId = $ticket->currentCycle()?->id;
         $existingTodayFeedback = TicketFeedback::where('ticket_id', $ticket->id)
+            ->when($currentCycleId, fn ($q) => $q->where('cycle_id', $currentCycleId))
+            ->where('submitted_by_id', $user->id)
             ->whereDate('submitted_at', $todayDate)
             ->first();
 
@@ -361,7 +386,7 @@ class MobileApiController extends Controller
 
         $feedback = TicketFeedback::create([
             'ticket_id'       => $ticket->id,
-            'engineer_id'     => $ticket->assigned_engineer_id ?? $user->id,
+            'engineer_id'     => $user->isEngineer() ? $user->id : ($ticket->assigned_engineer_id ?? $user->id),
             'submitted_by_id' => $user->id,
             'day_number'      => $calendarDay,
             'action_taken'    => $request->action_taken,
@@ -399,8 +424,12 @@ class MobileApiController extends Controller
         $user = $request->user();
         $ticket = Ticket::findOrFail($id);
 
-        if ($user->isEngineer() && $ticket->assigned_engineer_id !== $user->id) {
+        if ($user->isEngineer() && !$ticket->hasEngineer($user)) {
             return response()->json(['success' => false, 'message' => 'You are not assigned to this complaint.'], 403);
+        }
+
+        if (in_array($ticket->status, ['resolved', 'closed'], true)) {
+            return response()->json(['success' => false, 'message' => "Ticket #{$ticket->ticket_no} is already {$ticket->status}."], 422);
         }
 
         $validator = Validator::make($request->all(), [
@@ -432,6 +461,9 @@ class MobileApiController extends Controller
             'resolution_document_name' => $docName ?: $ticket->resolution_document_name,
         ]);
 
+        app(\App\Services\TicketCycleService::class)
+            ->recordResolution($ticket, $user, $request->resolution_summary, $docPath ?: $ticket->supporting_document, $docName ?: $ticket->resolution_document_name);
+
         TicketLog::create([
             'ticket_id' => $ticket->id,
             'user_id'   => $user->id,
@@ -454,7 +486,7 @@ class MobileApiController extends Controller
         $user = $request->user();
         $ticket = Ticket::findOrFail($id);
 
-        if ($user->isEngineer() && $ticket->assigned_engineer_id !== $user->id) {
+        if ($user->isEngineer() && !$ticket->hasEngineer($user)) {
             return response()->json(['success' => false, 'message' => 'You are not assigned to this complaint.'], 403);
         }
 
@@ -476,6 +508,8 @@ class MobileApiController extends Controller
             'resolved_at'        => null,
             'resolution_summary' => null,
         ]);
+
+        app(\App\Services\TicketCycleService::class)->undoResolution($ticket);
 
         TicketLog::create([
             'ticket_id' => $ticket->id,
@@ -499,7 +533,7 @@ class MobileApiController extends Controller
         $user = $request->user();
         $ticket = Ticket::findOrFail($id);
 
-        if ($user->isEngineer() && $ticket->assigned_engineer_id !== $user->id) {
+        if ($user->isEngineer() && !$ticket->hasEngineer($user)) {
             return response()->json(['success' => false, 'message' => 'You are not assigned to this complaint.'], 403);
         }
 
@@ -559,7 +593,7 @@ class MobileApiController extends Controller
         $user = $request->user();
         $ticket = Ticket::findOrFail($id);
 
-        if ($user->isEngineer() && $ticket->assigned_engineer_id !== $user->id && $ticket->original_field_engineer_id !== $user->id) {
+        if ($user->isEngineer() && !$ticket->hasEngineer($user) && $ticket->original_field_engineer_id !== $user->id) {
             return response()->json(['success' => false, 'message' => 'You are not assigned to this complaint.'], 403);
         }
 
@@ -694,7 +728,7 @@ class MobileApiController extends Controller
 
         $ticket = Ticket::findOrFail($request->ticket_id);
 
-        if ($user->isEngineer() && $ticket->assigned_engineer_id !== $user->id && $ticket->original_field_engineer_id !== $user->id) {
+        if ($user->isEngineer() && !$ticket->hasEngineer($user) && $ticket->original_field_engineer_id !== $user->id) {
             return response()->json([
                 'success' => false,
                 'message' => 'Unauthorized. You are not assigned to this complaint.',
@@ -726,7 +760,7 @@ class MobileApiController extends Controller
             ], 422);
         }
 
-        if ($ticket->hasActiveExpenseClaim()) {
+        if ($ticket->hasActiveExpenseClaim($user->id)) {
             return response()->json([
                 'success' => false,
                 'message' => "STRICT AUDIT POLICY: An expense claim is already pending or approved for Ticket #{$ticket->ticket_no}.",
@@ -1188,7 +1222,7 @@ class MobileApiController extends Controller
 
         $ticket = Ticket::findOrFail($request->ticket_id);
 
-        if ($user->isEngineer() && $ticket->assigned_engineer_id !== $user->id && $ticket->original_field_engineer_id !== $user->id) {
+        if ($user->isEngineer() && !$ticket->hasEngineer($user) && $ticket->original_field_engineer_id !== $user->id) {
             return response()->json(['success' => false, 'message' => 'You are not assigned to this complaint.'], 403);
         }
 

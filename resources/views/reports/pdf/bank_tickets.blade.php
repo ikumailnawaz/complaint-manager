@@ -257,6 +257,11 @@
                     @if($t->customer_ref_no)
                         <span style="color: #64748b; font-size: 6.8pt;">Ref: {{ $t->customer_ref_no }}</span><br>
                     @endif
+                    @if($t->reopen_count > 0 || ($t->current_cycle_no && $t->current_cycle_no > 1))
+                        <span class="badge badge-amber" style="margin-bottom: 2px;">
+                            Tour {{ $t->current_cycle_no ?? ($t->reopen_count + 1) }} (Reopen {{ $t->reopen_count }}x)
+                        </span><br>
+                    @endif
                     <strong>{{ $t->bank_name }}</strong><br>
                     <span class="badge {{ $t->urgency === 'high' ? 'badge-danger' : ($t->urgency === 'medium' ? 'badge-amber' : 'badge-success') }}">
                         {{ strtoupper($t->urgency ?? 'NORMAL') }}
@@ -268,7 +273,14 @@
                     <strong>{{ $t->branch_location }}</strong><br>
                     <span style="color: #475569;">{{ $t->branch_name ?: 'Main Branch' }}</span><br>
                     <span style="color: #0f172a; font-weight: bold;">{{ $t->machine_model ?: $t->machine_type }}</span><br>
-                    <span style="font-family: monospace; color: #64748b;">S/N: {{ $t->machine_serial_no ?: 'N/A' }}</span>
+                    <span style="font-family: monospace; color: #64748b;">S/N: {{ $t->machine_serial_no ?: 'N/A' }}</span><br>
+                    @php
+                        $engNames = $t->activeTicketEngineers->map(fn($e) => ($e->engineer?->name ?? 'Eng') . ($e->isLead() ? ' (Lead)' : ''))->implode(', ');
+                        if (empty($engNames)) {
+                            $engNames = $t->assignedEngineer?->name ?? 'Unassigned';
+                        }
+                    @endphp
+                    <span style="color: #64748b; font-size: 6.5pt;">Eng: {{ $engNames }}</span>
                 </td>
 
                 <!-- Intake & Reply -->

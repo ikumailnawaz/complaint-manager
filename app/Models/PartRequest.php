@@ -5,8 +5,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class PartRequest extends Model {
+    use \App\Models\Concerns\TagsTicketCycle;
+
     protected $fillable = [
-        'request_number', 'ticket_id', 'engineer_id', 'machine_model_id', 'machine_serial_no',
+        'request_number', 'ticket_id', 'cycle_id', 'engineer_id', 'machine_model_id', 'machine_serial_no',
         'fault_description', 'status', 'fault_video_path',
         'stock_verified_by_id', 'stock_verified_at', 'stock_remarks',
         'approved_by_id', 'approved_at', 'approval_remarks',
