@@ -202,19 +202,7 @@ class EmailIntegrationController extends Controller
         }
 
         $slaTat = $aiData['sla_tat'] ?? null;
-        if ($slaTat && preg_match('/(\d+)\s*day/i', $slaTat, $m)) {
-            $slaDeadline = Carbon::now()->addDays((int)$m[1]);
-        } elseif ($slaTat && preg_match('/(\d+)\s*hour/i', $slaTat, $m)) {
-            $slaDeadline = Carbon::now()->addHours((int)$m[1]);
-        } else {
-            $slaHours = match ($urgency) {
-                'high' => 4,
-                'medium' => 8,
-                'low' => 24,
-                default => 8,
-            };
-            $slaDeadline = Carbon::now()->addHours($slaHours);
-        }
+        $slaDeadline = Ticket::calculateBusinessDeadline($email->email_date ?? Carbon::now(), $slaTat, $urgency);
 
         // 4. Create Ticket (Status: 'open' / Unassigned matching system standard)
         $ticket = Ticket::create([
@@ -234,6 +222,7 @@ class EmailIntegrationController extends Controller
             'machine_serial_no' => $aiData['machine_serial_no'] ?? null,
             'warranty_status' => in_array($aiData['warranty_hint'] ?? '', ['in_warranty', 'out_of_warranty']) ? $aiData['warranty_hint'] : 'unknown',
             'urgency' => $urgency,
+            'sla_tat' => $slaTat,
             'status' => 'open', // OPEN = Unassigned
             'issue_summary' => $aiData['issue_summary'] ?? substr($email->subject, 0, 150),
             'issue_description' => $bodyContent,

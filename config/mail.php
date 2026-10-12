@@ -37,11 +37,11 @@ return [
         'smtp' => [
             'transport' => 'smtp',
             'url' => env('MAIL_URL'),
-            'host' => env('MAIL_HOST', 'smtp.mailgun.org'),
-            'port' => env('MAIL_PORT', 587),
-            'encryption' => env('MAIL_ENCRYPTION', 'tls'),
-            'username' => env('MAIL_USERNAME'),
-            'password' => env('MAIL_PASSWORD'),
+            'host' => env('MAIL_HOST', 'mail.cmscompany.biz'),
+            'port' => (int) env('MAIL_PORT', 465),
+            'encryption' => env('MAIL_ENCRYPTION', 'ssl'),
+            'username' => env('MAIL_USERNAME', 'support@cmscompany.biz'),
+            'password' => env('MAIL_PASSWORD', ''),
             'timeout' => null,
             'local_domain' => env('MAIL_EHLO_DOMAIN'),
         ],
@@ -108,8 +108,8 @@ return [
     */
 
     'from' => [
-        'address' => env('MAIL_FROM_ADDRESS', 'hello@example.com'),
-        'name' => env('MAIL_FROM_NAME', 'Example'),
+        'address' => env('MAIL_FROM_ADDRESS', 'support@cmscompany.biz'),
+        'name' => env('MAIL_FROM_NAME', 'CMS Technical Operations Desk'),
     ],
 
     /*
@@ -149,5 +149,6 @@ return [
 
     'host_domain' => env('MAIL_HOST_DOMAIN', 'cmscompany.biz'),
     'auto_bcc' => env('MAIL_AUTO_BCC_SENDER', true),
+    'cc_address' => env('MAIL_CC_ADDRESS', null),
 
 ];

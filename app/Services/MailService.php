@@ -52,7 +52,7 @@ class MailService
                 }
             }
 
-            $defaultCc = env('MAIL_CC_ADDRESS', null);
+            $defaultCc = config('mail.cc_address') ?: env('MAIL_CC_ADDRESS', null);
             if (!empty($defaultCc) && filter_var($defaultCc, FILTER_VALIDATE_EMAIL) && !in_array(strtolower($defaultCc), $ccList) && strtolower($defaultCc) !== strtolower($toEmail)) {
                 $ccList[] = strtolower($defaultCc);
             }
@@ -758,7 +758,7 @@ HTML;
             $mail->AltBody = "Dear {$bankName} Operations Team,\n\nYour complaint has been assigned to Field Engineer: {$engineerName} ({$engineerCity}).\nTicket No: {$ticketNo}\nPriority: {$urgencyBadge}\nExpected Resolution: Within Defined TAT\nCMS Company Support." . $threadChainText;
 
             $mail->send();
-            $messageId = $mail->getLastMessageID() ?: ('<' . uniqid('msg.') . '@' . env('MAIL_HOST_DOMAIN', 'cmscompany.biz') . '>');
+            $messageId = $mail->getLastMessageID() ?: ('<' . uniqid('msg.') . '@' . (config('mail.host_domain') ?: env('MAIL_HOST_DOMAIN', 'cmscompany.biz')) . '>');
 
             // Save sent copy to IMAP Sent folder so Outlook / Webmail displays the reply in Sent Items & Conversation threads
             $this->saveToImapSentFolder($mail);
@@ -825,7 +825,7 @@ HTML;
                 }
             }
 
-            $defaultCc = env('MAIL_CC_ADDRESS', null);
+            $defaultCc = config('mail.cc_address') ?: env('MAIL_CC_ADDRESS', null);
             if (!empty($defaultCc) && filter_var($defaultCc, FILTER_VALIDATE_EMAIL) && !in_array(strtolower($defaultCc), $ccList) && strtolower($defaultCc) !== strtolower($toEmail)) {
                 $ccList[] = strtolower($defaultCc);
             }
@@ -986,7 +986,7 @@ HTML;
             $mail->AltBody = "Dear {$ticket->bank_name} Operations Team,\n\nComplaint Ticket #{$ticket->ticket_no} has been RESOLVED.\nWork Summary: {$resolutionSummaryText}\nResolved By: {$engineerName}\n\nIf you require further support send email to support@cmscompany.biz\n\nCMS Technical Operations Support." . $threadChainText;
 
             $mail->send();
-            $messageId = $mail->getLastMessageID() ?: ('<' . uniqid('res.') . '@' . env('MAIL_HOST_DOMAIN', 'cmscompany.biz') . '>');
+            $messageId = $mail->getLastMessageID() ?: ('<' . uniqid('res.') . '@' . (config('mail.host_domain') ?: env('MAIL_HOST_DOMAIN', 'cmscompany.biz')) . '>');
 
             // Save sent copy to IMAP Sent folder so Outlook / Webmail displays the reply in Sent Items & Conversation threads
             $this->saveToImapSentFolder($mail);
@@ -1183,31 +1183,7 @@ HTML;
         $mail = new PHPMailer(true);
 
         try {
-            $mail->isSMTP();
-            $mail->Host       = env('MAIL_HOST', 'mail.cmscompany.biz');
-            $mail->SMTPAuth   = true;
-            $mail->Username   = env('MAIL_USERNAME', 'support@cmscompany.biz');
-            $mail->Password   = env('MAIL_PASSWORD', '');
-            
-            $encryption = strtolower(env('MAIL_ENCRYPTION', 'ssl'));
-            if ($encryption === 'ssl' || (int) env('MAIL_PORT', 465) === 465) {
-                $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS;
-            } else {
-                $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-            }
-            $mail->Port = (int) env('MAIL_PORT', 465);
-
-            $mail->SMTPOptions = [
-                'ssl' => [
-                    'verify_peer' => false,
-                    'verify_peer_name' => false,
-                    'allow_self_signed' => true,
-                ],
-            ];
-
-            $fromAddress = env('MAIL_FROM_ADDRESS', 'support@cmscompany.biz');
-            $fromName    = env('MAIL_FROM_NAME', 'CMS Technical Operations Desk');
-            $mail->setFrom($fromAddress, $fromName);
+            $this->configureSmtp($mail);
             $mail->addAddress(trim($toEmail));
 
             // Threading headers
@@ -1227,8 +1203,6 @@ HTML;
             if (!empty($threadTopic)) {
                 $mail->addCustomHeader('Thread-Topic', $threadTopic);
             }
-
-            $mail->Hostname = env('MAIL_HOST_DOMAIN', 'cmscompany.biz');
 
             $mail->Subject = $subject;
             $mail->isHTML(true);
@@ -1252,7 +1226,7 @@ HTML;
             $mail->AltBody = $bodyText;
 
             $mail->send();
-            $messageId = $mail->getLastMessageID() ?: ('<' . uniqid('msg.') . '@' . env('MAIL_HOST_DOMAIN', 'cmscompany.biz') . '>');
+            $messageId = $mail->getLastMessageID() ?: ('<' . uniqid('msg.') . '@' . (config('mail.host_domain') ?: env('MAIL_HOST_DOMAIN', 'cmscompany.biz')) . '>');
 
             // Save sent copy to IMAP Sent folder so Outlook / Webmail displays the reply in Sent Items & Conversation threads
             $this->saveToImapSentFolder($mail);
@@ -1284,18 +1258,19 @@ HTML;
     protected function configureSmtp(PHPMailer $mail): void
     {
         $mail->isSMTP();
-        $mail->Host       = env('MAIL_HOST', 'mail.cmscompany.biz');
+        $mail->Host       = config('mail.mailers.smtp.host') ?: env('MAIL_HOST', 'mail.cmscompany.biz');
         $mail->SMTPAuth   = true;
-        $mail->Username   = env('MAIL_USERNAME', 'support@cmscompany.biz');
-        $mail->Password   = env('MAIL_PASSWORD', '');
+        $mail->Username   = config('mail.mailers.smtp.username') ?: env('MAIL_USERNAME', 'support@cmscompany.biz');
+        $mail->Password   = config('mail.mailers.smtp.password') ?? env('MAIL_PASSWORD', '');
         
-        $encryption = strtolower(env('MAIL_ENCRYPTION', 'ssl'));
-        if ($encryption === 'ssl' || (int) env('MAIL_PORT', 465) === 465) {
+        $encryption = strtolower((string) (config('mail.mailers.smtp.encryption') ?: env('MAIL_ENCRYPTION', 'ssl')));
+        $port = (int) (config('mail.mailers.smtp.port') ?: env('MAIL_PORT', 465));
+        if ($encryption === 'ssl' || $port === 465) {
             $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS;
         } else {
             $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
         }
-        $mail->Port = (int) env('MAIL_PORT', 465);
+        $mail->Port = $port;
 
         // SSL verification bypass for local environments / self-signed certs
         $mail->SMTPOptions = [
@@ -1307,18 +1282,23 @@ HTML;
         ];
 
         // Set Hostname for Message-ID and HELO so Message-ID domain is valid and not @127.0.0.1
-        $mail->Hostname = env('MAIL_HOST_DOMAIN', 'cmscompany.biz');
+        $mail->Hostname = config('mail.host_domain') ?: env('MAIL_HOST_DOMAIN', 'cmscompany.biz');
 
         // Default Sender
-        $fromAddress = env('MAIL_FROM_ADDRESS', 'support@cmscompany.biz');
-        $fromName    = env('MAIL_FROM_NAME', 'CMS Technical Operations Desk');
+        $fromAddress = config('mail.from.address') ?: env('MAIL_FROM_ADDRESS', 'support@cmscompany.biz');
+        $fromName    = config('mail.from.name') ?: env('MAIL_FROM_NAME', 'CMS Technical Operations Desk');
         $mail->setFrom($fromAddress, $fromName);
 
         // Optional Auto-BCC sender so mailbox receives a direct copy in INBOX for instantaneous Outlook thread linking
-        if (filter_var(env('MAIL_AUTO_BCC_SENDER', true), FILTER_VALIDATE_BOOLEAN)) {
+        $autoBcc = config('mail.auto_bcc') ?? env('MAIL_AUTO_BCC_SENDER', true);
+        if (filter_var($autoBcc, FILTER_VALIDATE_BOOLEAN)) {
             if (filter_var($fromAddress, FILTER_VALIDATE_EMAIL)) {
                 $mail->addBCC($fromAddress);
             }
+        }
+
+        if (empty($mail->Password)) {
+            Log::warning("MailService: SMTP password is empty or unconfigured! Check MAIL_PASSWORD in .env.");
         }
     }
 
@@ -1351,11 +1331,11 @@ HTML;
             return false;
         }
 
-        $host = env('IMAP_HOST', env('MAIL_HOST', 'mail.cmscompany.biz'));
-        $port = (int) env('IMAP_PORT', 993);
-        $encryption = strtolower(env('IMAP_ENCRYPTION', 'ssl'));
-        $username = env('IMAP_USERNAME', env('MAIL_USERNAME', 'support@cmscompany.biz'));
-        $password = env('IMAP_PASSWORD', env('MAIL_PASSWORD', ''));
+        $host = config('mail.imap.host') ?: env('IMAP_HOST', config('mail.mailers.smtp.host', 'mail.cmscompany.biz'));
+        $port = (int) (config('mail.imap.port') ?: env('IMAP_PORT', 993));
+        $encryption = strtolower((string) (config('mail.imap.encryption') ?: env('IMAP_ENCRYPTION', 'ssl')));
+        $username = config('mail.imap.username') ?: env('IMAP_USERNAME', config('mail.mailers.smtp.username', 'support@cmscompany.biz'));
+        $password = config('mail.imap.password') ?? env('IMAP_PASSWORD', config('mail.mailers.smtp.password', ''));
 
         if (empty($username) || empty($password)) {
             Log::warning("MailService: Missing IMAP credentials; cannot append to IMAP Sent.");

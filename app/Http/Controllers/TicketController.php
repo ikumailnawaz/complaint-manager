@@ -235,33 +235,9 @@ class TicketController extends Controller
             $ticketSource = 'auto_generated';
         }
 
-        // SLA deadline calculation (Supports 1 Day, 2 Days, 3 Days, 4 Days, 4h, 8h)
+        // SLA deadline calculation (respects business working hours and skips weekends)
         $slaTat = $request->input('sla_tat');
-        if ($slaTat === '1d' || $slaTat === '1 day') {
-            $slaDeadline = Carbon::now()->addDays(1);
-        } elseif ($slaTat === '2d' || $slaTat === '2 days') {
-            $slaDeadline = Carbon::now()->addDays(2);
-        } elseif ($slaTat === '3d' || $slaTat === '3 days') {
-            $slaDeadline = Carbon::now()->addDays(3);
-        } elseif ($slaTat === '4d' || $slaTat === '4 days') {
-            $slaDeadline = Carbon::now()->addDays(4);
-        } elseif ($slaTat === '4h' || $slaTat === '4 hours') {
-            $slaDeadline = Carbon::now()->addHours(4);
-        } elseif ($slaTat === '8h' || $slaTat === '8 hours') {
-            $slaDeadline = Carbon::now()->addHours(8);
-        } elseif ($slaTat && preg_match('/(\d+)\s*hour/i', $slaTat, $m)) {
-            $slaDeadline = Carbon::now()->addHours((int)$m[1]);
-        } elseif ($slaTat && preg_match('/(\d+)\s*day/i', $slaTat, $m)) {
-            $slaDeadline = Carbon::now()->addDays((int)$m[1]);
-        } else {
-            $slaHours = match ($validated['urgency']) {
-                'high' => 4,
-                'medium' => 8,
-                'low' => 24,
-                default => 8,
-            };
-            $slaDeadline = Carbon::now()->addHours($slaHours);
-        }
+        $slaDeadline = Ticket::calculateBusinessDeadline(Carbon::now(), $slaTat, $validated['urgency']);
 
         $ticket = Ticket::create([
             'ticket_no' => $ticketNo,
@@ -279,6 +255,7 @@ class TicketController extends Controller
             'machine_serial_no' => $validated['machine_serial_no'] ?? null,
             'warranty_status' => $validated['warranty_status'],
             'urgency' => $validated['urgency'],
+            'sla_tat' => $slaTat,
             'status' => !empty($validated['assigned_engineer_id']) ? 'assigned' : 'open',
             'issue_summary' => $validated['issue_summary'],
             'issue_description' => $validated['issue_description'] ?? null,
@@ -354,13 +331,10 @@ class TicketController extends Controller
         if (!empty($request->custom_sla_deadline)) {
             $updateData['sla_deadline'] = Carbon::parse($request->custom_sla_deadline);
         } elseif (!empty($request->sla_tat)) {
-            if (preg_match('/(\d+)\s*day/i', $request->sla_tat, $m)) {
-                $updateData['sla_deadline'] = Carbon::now()->addDays((int)$m[1]);
-            } elseif (preg_match('/(\d+)\s*hour/i', $request->sla_tat, $m)) {
-                $updateData['sla_deadline'] = Carbon::now()->addHours((int)$m[1]);
-            }
+            $updateData['sla_tat'] = $request->sla_tat;
+            $updateData['sla_deadline'] = Ticket::calculateBusinessDeadline(Carbon::now(), $request->sla_tat, $ticket->urgency);
         } elseif (empty($ticket->sla_deadline)) {
-            $updateData['sla_deadline'] = Carbon::now()->addHours($ticket->expectedResponseHours());
+            $updateData['sla_deadline'] = Ticket::calculateBusinessDeadline(Carbon::now(), $ticket->sla_tat, $ticket->urgency);
         }
 
         $ticket->update($updateData);
@@ -1303,21 +1277,12 @@ class TicketController extends Controller
         if (!empty($request->custom_sla_deadline)) {
             $validated['sla_deadline'] = Carbon::parse($request->custom_sla_deadline);
         } elseif (!empty($request->sla_tat)) {
-            if (preg_match('/(\d+)\s*day/i', $request->sla_tat, $m)) {
-                $validated['sla_deadline'] = Carbon::now()->addDays((int)$m[1]);
-            } elseif (preg_match('/(\d+)\s*hour/i', $request->sla_tat, $m)) {
-                $validated['sla_deadline'] = Carbon::now()->addHours((int)$m[1]);
-            }
-        } elseif (empty($ticket->sla_deadline) || $request->urgency !== $ticket->urgency) {
-            $slaHours = match ($validated['urgency'] ?? 'medium') {
-                'high' => 4,
-                'medium' => 8,
-                'low' => 24,
-                default => 8,
-            };
-            $validated['sla_deadline'] = Carbon::now()->addHours($slaHours);
+            $validated['sla_tat'] = $request->sla_tat;
+            $validated['sla_deadline'] = Ticket::calculateBusinessDeadline(Carbon::now(), $request->sla_tat, $validated['urgency'] ?? $ticket->urgency);
+        } elseif (empty($ticket->sla_deadline) || (isset($validated['urgency']) && $validated['urgency'] !== $ticket->urgency)) {
+            $validated['sla_deadline'] = Ticket::calculateBusinessDeadline(Carbon::now(), $ticket->sla_tat, $validated['urgency'] ?? $ticket->urgency);
         }
-        unset($validated['sla_tat'], $validated['custom_sla_deadline']);
+        unset($validated['custom_sla_deadline']);
 
         // Handle assignment timestamp if engineer changed or freshly assigned
         $engineerChanged = !empty($validated['assigned_engineer_id']) && $validated['assigned_engineer_id'] != $ticket->assigned_engineer_id;

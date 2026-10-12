@@ -175,7 +175,7 @@ class TicketCycleService
 
             $now = Carbon::now();
             $nextNo = ((int) $ticket->cycles()->max('cycle_no')) + 1;
-            $slaDeadline = $now->copy()->addHours($ticket->expectedResponseHours());
+            $slaDeadline = Ticket::calculateBusinessDeadline($now, $ticket->sla_tat, $ticket->urgency);
 
             $cycle = TicketCycle::create([
                 'ticket_id' => $ticket->id,

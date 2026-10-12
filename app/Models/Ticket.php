@@ -99,6 +99,7 @@ class Ticket extends Model
         'resolution_email_message_id',
         'resolution_email_to',
         'sla_deadline',
+        'sla_tat',
         'escalated_at',
         'escalated_to_id',
         'workshop_location',
@@ -514,11 +515,127 @@ class Ticket extends Model
     public function expectedResponseHours(): int
     {
         return match ($this->urgency) {
+            'critical' => 3,
             'high' => 4,
             'medium' => 8,
             'low' => 24,
             default => 8,
         };
+    }
+
+
+    /**
+     * Get budgeted SLA duration in hours.
+     */
+    public function getSlaBudgetHours(): float
+    {
+        if (!empty($this->sla_tat)) {
+            if (preg_match('/(\d+)\s*(?:d|day|days)/i', $this->sla_tat, $m)) {
+                return (float) (((int) $m[1]) * 24);
+            }
+            if (preg_match('/(\d+)\s*(?:h|hour|hours)/i', $this->sla_tat, $m)) {
+                return (float) (int) $m[1];
+            }
+        }
+
+        return (float) $this->expectedResponseHours();
+    }
+
+    /**
+     * Compute SLA deadline strictly respecting business working calendar:
+     * - Working days: Monday through Friday.
+     * - Non-working days: Saturday and Sunday are excluded.
+     * - The clock freezes at Friday 23:59:59 and resumes Monday 00:00:00.
+     * - Deadlines never land on Saturday or Sunday.
+     */
+    public static function calculateBusinessDeadline(Carbon $startDate, ?string $slaTat = null, ?string $urgency = null): Carbon
+    {
+        $start = $startDate->copy();
+        $hours = null;
+
+        if (!empty($slaTat)) {
+            if (preg_match('/(\d+)\s*(?:d|day|days)/i', $slaTat, $m)) {
+                $hours = ((int) $m[1]) * 24;
+            } elseif (preg_match('/(\d+)\s*(?:h|hour|hours)/i', $slaTat, $m)) {
+                $hours = (int) $m[1];
+            }
+        }
+
+        if ($hours === null || $hours <= 0) {
+            $hours = match (strtolower((string) $urgency)) {
+                'critical' => 3,
+                'high' => 4,
+                'medium' => 8,
+                'low' => 24,
+                default => 8,
+            };
+        }
+
+        return static::addBusinessHours($start, $hours);
+    }
+
+    /**
+     * Add business hours to a given date, skipping weekends (Saturday and Sunday).
+     */
+    public static function addBusinessHours(Carbon $start, float|int $hours): Carbon
+    {
+        $cursor = $start->copy();
+        $remainingMinutes = (int) round($hours * 60);
+
+        // If starting point lands on a weekend, advance cursor to Monday 00:00:00
+        if ($cursor->isWeekend()) {
+            $cursor->next(Carbon::MONDAY)->startOfDay();
+        }
+
+        while ($remainingMinutes > 0) {
+            if ($cursor->isWeekend()) {
+                $cursor->next(Carbon::MONDAY)->startOfDay();
+            }
+
+            $endOfDay = $cursor->copy()->endOfDay();
+            $minutesInDay = (int) $cursor->diffInMinutes($endOfDay) + 1;
+
+            if ($remainingMinutes <= $minutesInDay) {
+                $cursor->addMinutes($remainingMinutes);
+                $remainingMinutes = 0;
+                break;
+            } else {
+                $remainingMinutes -= $minutesInDay;
+                $cursor = $endOfDay->addSecond();
+            }
+        }
+
+        if ($cursor->isWeekend()) {
+            $cursor->next(Carbon::MONDAY)->startOfDay();
+        }
+
+        return $cursor;
+    }
+
+    /**
+     * Calculate business working minutes between two dates (excluding Saturday and Sunday).
+     */
+    public static function calculateBusinessMinutesBetween(Carbon $start, Carbon $end): int
+    {
+        if ($start >= $end) {
+            return 0;
+        }
+
+        $cursor = $start->copy();
+        $businessMinutes = 0;
+
+        while ($cursor < $end) {
+            $dayEnd = $cursor->copy()->endOfDay();
+            $sliceEnd = $dayEnd < $end ? $dayEnd : $end->copy();
+
+            if (!$cursor->isWeekend()) {
+                $businessMinutes += (int) $cursor->diffInMinutes($sliceEnd);
+            }
+
+            $cursor = $sliceEnd->copy()->addSecond();
+        }
+
+        return $businessMinutes;
     }
 
     public function canNotifyWhatsApp(): bool
@@ -884,7 +1001,14 @@ class Ticket extends Model
             ? round(abs($start->diffInMinutes($this->sla_deadline)) / 60, 1)
             : $this->expectedResponseHours();
 
-        $isInTat = ($netMinutes / 60) <= ($targetHours + 0.05);
+        $isOverdue = $this->isSlaBreached();
+        $isExceeded = ($netMinutes / 60) > ($targetHours + 0.05);
+
+        $isInTat = !$isOverdue && !$isExceeded;
+        $tatStatusLabel = $isInTat ? 'In-TAT (Compliant)' : 'Out-of-TAT (Exceeded)';
+        if ($isOverdue) {
+            $tatStatusLabel = 'Out-of-TAT (Breached)';
+        }
 
         return [
             'is_resolved' => $isResolved,
@@ -920,7 +1044,7 @@ class Ticket extends Model
 
             'target_sla_hours' => $targetHours,
             'is_in_tat' => $isInTat,
-            'tat_status_label' => $isInTat ? 'In-TAT (Compliant)' : 'Out-of-TAT (Exceeded)',
+            'tat_status_label' => $tatStatusLabel,
         ];
     }
 
