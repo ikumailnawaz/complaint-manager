@@ -132,22 +132,9 @@ class FetchBankEmailsCommand extends Command
                 $urgency = 'medium';
             }
 
-            // Calculate SLA / TAT (Supports 1 Day, 2 Days, 3 Days, 4 Days, or Hours)
+            // Calculate SLA / TAT (Supports 1 Day, 2 Days, 3 Days, 4 Days, or Hours skipping weekends)
             $slaTat = $aiData['sla_tat'] ?? null;
-            if ($slaTat && preg_match('/(\d+)\s*day/i', $slaTat, $m)) {
-                $slaDeadline = Carbon::now()->addDays((int)$m[1]);
-            } elseif ($slaTat && preg_match('/(\d+)\s*hour/i', $slaTat, $m)) {
-                $slaDeadline = Carbon::now()->addHours((int)$m[1]);
-            } else {
-                // Default SLA: High = 1 Day, Medium = 2 Days, Low = 3 Days
-                $slaDays = match ($urgency) {
-                    'high' => 1,
-                    'medium' => 2,
-                    'low' => 3,
-                    default => 2,
-                };
-                $slaDeadline = Carbon::now()->addDays($slaDays);
-            }
+            $slaDeadline = Ticket::calculateBusinessDeadline(Carbon::now(), $slaTat, $urgency);
 
             $incomingMessageId = $header->message_id ?? null;
 
@@ -170,6 +157,7 @@ class FetchBankEmailsCommand extends Command
                 'machine_serial_no' => $aiData['machine_serial_no'] ?? null,
                 'warranty_status' => in_array($aiData['warranty_hint'] ?? '', ['in_warranty', 'out_of_warranty']) ? $aiData['warranty_hint'] : 'unknown',
                 'urgency' => $urgency,
+                'sla_tat' => $slaTat,
                 'status' => 'open', // OPEN = Unassigned
                 'issue_summary' => $aiData['issue_summary'] ?? substr($subject, 0, 150),
                 'issue_description' => $body,

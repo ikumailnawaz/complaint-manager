@@ -1094,6 +1094,24 @@ class Ticket extends Model
                 }
             }
 
+            if ($dayFeedbacks->isEmpty() && $dayDate->isWeekend()) {
+                $matrix[] = [
+                    'day_number' => $day,
+                    'is_logged' => true,
+                    'is_weekend' => true,
+                    'status' => 'weekend',
+                    'date_estimated' => $dayDate,
+                    'feedback' => null,
+                    'feedback_text' => 'Weekend (Saturday/Sunday Off)',
+                    'action_taken' => 'Non-working weekend pause',
+                    'parts_required' => null,
+                    'submitted_at' => null,
+                    'engineer_name' => 'N/A',
+                    'tour_no' => null,
+                ];
+                continue;
+            }
+
             if ($dayFeedbacks->isNotEmpty()) {
                 $fb = $dayFeedbacks->sortByDesc(fn ($f) => $f->submitted_at ?? $f->created_at)->first();
                 $multi = $dayFeedbacks->count() > 1;

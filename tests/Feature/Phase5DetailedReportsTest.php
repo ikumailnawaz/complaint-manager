@@ -445,6 +445,9 @@ class Phase5DetailedReportsTest extends TestCase
 
     public function test_escalated_tickets_view_displays_audit_trail_and_missing_day_feedback_as_na(): void
     {
+        // Pin to a Thursday so subDays(3) spans Mon-Thu (all working weekdays)
+        Carbon::setTestNow(Carbon::parse('2026-10-15 12:00:00'));
+
         $landedAt = Carbon::now()->subDays(3)->setHour(9)->setMinute(0);
         $ticket = Ticket::create([
             'ticket_no' => 'CMP-ESCALATE-TEST-01',
@@ -509,6 +512,8 @@ class Phase5DetailedReportsTest extends TestCase
         $respShow->assertSee('Complete Lifecycle Audit Trail &amp; Intake Latency', false);
         $respShow->assertSee('Day 2 : N/A');
         $respShow->assertSee('Missing Daily Progress Feedback');
+
+        Carbon::setTestNow();
     }
 
     public function test_pdf_and_csv_reports_export_cleanly_without_unwanted_company_headers(): void

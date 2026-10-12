@@ -1939,7 +1939,26 @@
                 @else
                 <div class="relative pl-6 space-y-4 before:content-[''] before:absolute before:left-2.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-200">
                     @foreach(array_reverse($fbMatrix) as $item)
-                        @if($item['is_logged'])
+                        @if(!empty($item['is_weekend']))
+                            {{-- WEEKEND NON-WORKING DAY PAUSE --}}
+                            <div class="relative bg-slate-50 border border-slate-200/80 rounded-xl p-3.5 transition shadow-sm text-xs">
+                                <span class="absolute -left-[27px] top-4 w-3.5 h-3.5 rounded-full border-2 border-white bg-slate-400 shadow"></span>
+                                <div class="flex items-start justify-between gap-2 mb-1">
+                                    <div class="flex items-center space-x-1.5 flex-wrap">
+                                        <span class="bg-slate-200 text-slate-700 font-extrabold px-2 py-0.5 rounded text-[10px] uppercase">
+                                            Day {{ $item['day_number'] }} ({{ $item['date_estimated']?->format('D, d M') }})
+                                        </span>
+                                        <span class="font-bold text-slate-600 ml-1">Weekend Non-Working Pause</span>
+                                    </div>
+                                    <span class="text-[10px] text-slate-400 font-mono">
+                                        Saturday/Sunday Off
+                                    </span>
+                                </div>
+                                <p class="text-slate-500 leading-relaxed font-sans text-xs">
+                                    Official non-working day. Daily reporting paused; SLA hours paused for weekend.
+                                </p>
+                            </div>
+                        @elseif($item['is_logged'])
                             @php $fb = $item['feedback']; @endphp
                             <div class="relative bg-slate-50 hover:bg-slate-100/70 border border-slate-200/80 rounded-xl p-4 transition shadow-sm text-xs">
                                 <span class="absolute -left-[27px] top-4 w-3.5 h-3.5 rounded-full border-2 border-white bg-indigo-600 shadow"></span>

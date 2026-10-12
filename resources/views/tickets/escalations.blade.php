@@ -312,7 +312,11 @@
                         <td class="px-4 py-3.5 min-w-[220px]">
                             <div class="flex items-center gap-1 flex-wrap mb-1">
                                 @foreach($fbMatrix as $item)
-                                    @if($item['is_logged'])
+                                    @if(!empty($item['is_weekend']))
+                                        <span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-200 text-slate-700 border border-slate-300" title="Day {{ $item['day_number'] }} ({{ $item['date_estimated']?->format('D, d M') }}): Weekend Off">
+                                            {{ $item['date_estimated']?->format('D') ?? ('Day '.$item['day_number']) }}: Off
+                                        </span>
+                                    @elseif($item['is_logged'])
                                         <span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300" title="Day {{ $item['day_number'] }}: Logged by {{ $item['engineer_name'] }}">
                                             Day {{ $item['day_number'] }} ✓
                                         </span>
@@ -327,7 +331,7 @@
                             @if($missingDays > 0)
                                 <div class="text-[10px] font-black text-rose-700 flex items-center gap-1">
                                     <i class="fa-solid fa-triangle-exclamation text-rose-600"></i>
-                                    <span>MISSING FEEDBACK ({{ $missingDays }} Days)</span>
+                                    <span>MISSING FEEDBACK ({{ $missingDays }} {{ $missingDays === 1 ? 'Day' : 'Days' }})</span>
                                 </div>
                             @else
                                 <div class="text-[10px] font-bold text-emerald-700 flex items-center gap-1">
@@ -467,14 +471,28 @@
 
                 <div class="space-y-3">
                     @foreach($fbMatrix as $item)
-                        @if($item['is_logged'])
+                        @if(!empty($item['is_weekend']))
+                            <div class="p-3.5 bg-slate-100/80 rounded-xl border border-slate-200 text-xs space-y-1">
+                                <div class="flex items-center justify-between border-b border-slate-200 pb-1.5">
+                                    <span class="px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-300 text-slate-700">
+                                        Day {{ $item['day_number'] }} ({{ $item['date_estimated']?->format('D, d M') }})
+                                    </span>
+                                    <span class="text-slate-500 font-bold uppercase text-[10px]">
+                                        Weekend (Saturday/Sunday Off)
+                                    </span>
+                                </div>
+                                <div class="text-slate-700 font-medium mt-1">
+                                    Non-working weekend pause. Daily progress reporting is paused and not counted as a violation.
+                                </div>
+                            </div>
+                        @elseif($item['is_logged'])
                             <div class="p-3.5 bg-emerald-50/50 rounded-xl border border-emerald-200 text-xs space-y-1.5">
                                 <div class="flex items-center justify-between border-b border-emerald-200/60 pb-1.5">
                                     <span class="px-2 py-0.5 rounded-full text-[11px] font-black bg-emerald-600 text-white">
                                         Day {{ $item['day_number'] }} ✓ Logged
                                     </span>
                                     <span class="text-slate-500 font-mono text-[11px]">
-                                        {{ $item['submitted_at']->format('d M Y, h:i A') }} (by {{ $item['engineer_name'] }})
+                                        {{ $item['submitted_at']?->format('d M Y, h:i A') ?? 'Logged' }} (by {{ $item['engineer_name'] }})
                                     </span>
                                 </div>
                                 <div class="font-bold text-slate-900 mt-1">{{ $item['feedback_text'] }}</div>
