@@ -121,6 +121,30 @@ class FirebasePushService
     }
 
     /**
+     * Send push notification to multiple users.
+     */
+    public static function sendToUsers($users, string $title, string $body, array $data = []): array
+    {
+        $sentCount = 0;
+        foreach ($users as $user) {
+            if ($user instanceof User && !empty($user->fcm_token)) {
+                $res = self::sendToUser($user, $title, $body, $data);
+                if ($res['success'] ?? false) $sentCount++;
+            }
+        }
+        return ['success' => true, 'count' => $sentCount];
+    }
+
+    /**
+     * Send push notification to all users with a specific role.
+     */
+    public static function sendToRole(string $role, string $title, string $body, array $data = []): array
+    {
+        $users = User::where('role', $role)->whereNotNull('fcm_token')->where('fcm_token', '!=', '')->get();
+        return self::sendToUsers($users, $title, $body, $data);
+    }
+
+    /**
      * Send push notification to a specific FCM device token via HTTP v1 API.
      * @return array{success: bool, error: ?string}
      */

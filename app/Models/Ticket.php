@@ -112,6 +112,11 @@ class Ticket extends Model
         'workshop_received_at',
         'workshop_received_by_id',
         'workshop_intake_remarks',
+        'workshop_incharge_id',
+        'workshop_tat_hours',
+        'workshop_tat_deadline',
+        'workshop_instructions',
+        'workshop_realigned_at',
         'workshop_repaired_at',
         'workshop_repair_summary',
         'return_courier',
@@ -170,6 +175,8 @@ class Ticket extends Model
         'approval_requested_at' => 'datetime',
         'sla_paused_at' => 'datetime',
         'approval_arrived_at' => 'datetime',
+        'workshop_tat_deadline' => 'datetime',
+        'workshop_realigned_at' => 'datetime',
     ];
 
     /**
@@ -316,6 +323,11 @@ class Ticket extends Model
     public function workshopEngineer(): BelongsTo
     {
         return $this->belongsTo(User::class, 'workshop_engineer_id');
+    }
+
+    public function workshopIncharge(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'workshop_incharge_id');
     }
 
     public function workshopReceivedBy(): BelongsTo

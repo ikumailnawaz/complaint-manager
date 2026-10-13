@@ -93,6 +93,11 @@ class WorkshopController extends Controller
         $tickets = $query->orderByDesc('updated_at')->paginate(15)->withQueryString();
 
         $engineers = User::where('role', 'engineer')->orderBy('name')->get();
+        $incharges = User::whereIn('role', ['workshop_incharge', 'office_staff', 'admin'])
+            ->orderByRaw("CASE WHEN role = 'workshop_incharge' THEN 0 ELSE 1 END")
+            ->orderBy('name')
+            ->get();
+
         $workshopLocations = [
             'Lahore Central Workshop',
             'Karachi Hub Workshop',
@@ -100,52 +105,124 @@ class WorkshopController extends Controller
             'Multan Service Center',
         ];
 
-        return view('workshop.index', compact('tickets', 'tab', 'counts', 'engineers', 'workshopLocations'));
+        return view('workshop.index', compact('tickets', 'tab', 'counts', 'engineers', 'incharges', 'workshopLocations'));
     }
 
     /**
-     * Mark Machine Received at Workshop Facility & Handover to Workshop Engineer
+     * Mark Machine Received at Workshop Facility & Handover to Workshop Incharge (Ikram)
      */
     public function receive(Request $request, Ticket $ticket, WhatsAppService $whatsapp)
     {
         abort_unless(Auth::user()->isSuperior(), 403, 'Only management can process physical workshop intake.');
 
         $request->validate([
-            'workshop_engineer_id'   => 'required|exists:users,id',
+            'workshop_incharge_id'    => 'nullable|exists:users,id',
+            'workshop_engineer_id'    => 'nullable|exists:users,id',
+            'workshop_location'       => 'nullable|string|max:150',
             'workshop_intake_remarks' => 'required|string|max:500',
         ], [
-            'workshop_engineer_id.required'   => 'Please assign the Workshop Engineer who is physically taking charge of this machine.',
             'workshop_intake_remarks.required' => 'Physical condition & intake inspection notes are required.',
         ]);
 
-        $workshopEngineer = User::findOrFail($request->workshop_engineer_id);
+        // Find selected incharge, or default to user with role workshop_incharge (e.g. Ikram), or fallback
+        $incharge = null;
+        if ($request->filled('workshop_incharge_id')) {
+            $incharge = User::find($request->workshop_incharge_id);
+        }
+        if (!$incharge) {
+            $incharge = User::where('role', 'workshop_incharge')->first();
+        }
+        if (!$incharge && $request->filled('workshop_engineer_id')) {
+            $incharge = User::find($request->workshop_engineer_id);
+        }
+        if (!$incharge) {
+            $incharge = Auth::user();
+        }
 
-        // Calculate inbound transit duration
+        $location = $request->workshop_location ?: ($ticket->workshop_location ?: 'Lahore Central Workshop');
         $dispatchedAt = $ticket->workshop_dispatched_at ?? now();
         $receivedAt = now();
         $transitDuration = $ticket->inbound_transit_duration_text;
 
         $ticket->update([
-            'status'                   => 'in_workshop_repair',
-            'workshop_received_at'     => $receivedAt,
-            'workshop_received_by_id'  => Auth::id(),
-            'workshop_engineer_id'     => $workshopEngineer->id,
-            // Formal Handover: Ticket now assigned to the Workshop Engineer!
-            'assigned_engineer_id'     => $workshopEngineer->id,
-            'workshop_intake_remarks'  => $request->workshop_intake_remarks,
+            'status'                  => 'in_workshop_repair',
+            'workshop_location'       => $location,
+            'workshop_received_at'    => $receivedAt,
+            'workshop_received_by_id' => Auth::id(),
+            'workshop_incharge_id'    => $incharge->id,
+            // Ticket temporarily held by Workshop Incharge until realigned to bench engineer
+            'assigned_engineer_id'    => $incharge->id,
+            'workshop_intake_remarks' => $request->workshop_intake_remarks,
         ]);
 
-        // WhatsApp notification to the newly assigned workshop engineer
-        $whatsapp->sendWorkshopAlert($ticket, $ticket->workshop_location ?? 'Central Workshop', $workshopEngineer);
+        // Notification & WhatsApp alert to Workshop Incharge (Ikram)
+        \App\Services\NotificationService::notifyWorkshopReceived($ticket, $incharge);
+        try {
+            $whatsapp->sendWorkshopAlert($ticket, $location, $incharge);
+        } catch (\Throwable $e) {}
 
         TicketLog::create([
             'ticket_id' => $ticket->id,
             'user_id'   => Auth::id(),
             'action'    => 'workshop_received',
-            'notes'     => "Machine physically received at {$ticket->workshop_location} by " . Auth::user()->name . ". Handover complete: Assigned to Workshop Engineer {$workshopEngineer->name}. (Inbound Cargo Transit Time: {$transitDuration}). Inspection Remarks: {$request->workshop_intake_remarks}",
+            'notes'     => "Machine physically received at {$location} by " . Auth::user()->name . ". Handover complete: Assigned to Workshop Incharge {$incharge->name}. (Inbound Cargo Transit Time: {$transitDuration}). Inspection Remarks: {$request->workshop_intake_remarks}",
         ]);
 
-        return back()->with('success', "Machine received at workshop! Ticket transferred to Workshop Engineer {$workshopEngineer->name}.");
+        return back()->with('success', "Machine received at workshop! Ticket handed over to Workshop Incharge {$incharge->name}.");
+    }
+
+    /**
+     * Workshop Incharge (Ikram) Re-aligns Machine to Bench Engineer with TAT
+     */
+    public function realign(Request $request, Ticket $ticket, WhatsAppService $whatsapp)
+    {
+        abort_unless(Auth::user()->isSuperior() || Auth::user()->isWorkshopIncharge() || Auth::id() === $ticket->workshop_incharge_id, 403, 'Unauthorized to realign workshop machines.');
+
+        $request->validate([
+            'workshop_engineer_id'  => 'required|exists:users,id',
+            'workshop_tat_hours'    => 'required|integer|min:1|max:720',
+            'workshop_instructions' => 'nullable|string|max:1000',
+        ], [
+            'workshop_engineer_id.required' => 'Please select the Bench Engineer.',
+            'workshop_tat_hours.required'   => 'Please specify Target Turnaround Time (TAT) in hours.',
+        ]);
+
+        $engineer = User::findOrFail($request->workshop_engineer_id);
+        $tatHours = (int) $request->workshop_tat_hours;
+        $tatDeadline = now()->addHours($tatHours);
+
+        $ticket->update([
+            'workshop_engineer_id'   => $engineer->id,
+            'assigned_engineer_id'   => $engineer->id,
+            'workshop_tat_hours'     => $tatHours,
+            'workshop_tat_deadline'  => $tatDeadline,
+            'workshop_instructions'  => $request->workshop_instructions,
+            'workshop_realigned_at'  => now(),
+        ]);
+
+        // Align engineer to active engineers so it shows in their mobile app
+        if (!$ticket->activeTicketEngineers()->where('engineer_id', $engineer->id)->exists()) {
+            $ticket->ticketEngineers()->create([
+                'engineer_id' => $engineer->id,
+                'role'        => 'support',
+                'assigned_at' => now(),
+            ]);
+        }
+
+        TicketLog::create([
+            'ticket_id' => $ticket->id,
+            'user_id'   => Auth::id(),
+            'action'    => 'workshop_realigned',
+            'notes'     => "Realigned to Bench Engineer {$engineer->name} with TAT of {$tatHours} Hours (Deadline: {$tatDeadline->format('d M Y, h:i A')}). Instructions: {$request->workshop_instructions}",
+        ]);
+
+        // Push notification & WhatsApp to Bench Engineer
+        \App\Services\NotificationService::notifyWorkshopRealigned($ticket, $engineer, $tatHours, $request->workshop_instructions);
+        try {
+            $whatsapp->sendWorkshopAlert($ticket, $ticket->workshop_location ?? 'Central Workshop', $engineer);
+        } catch (\Throwable $e) {}
+
+        return back()->with('success', "Ticket assigned to Bench Engineer {$engineer->name} with TAT of {$tatHours} hours!");
     }
 
     /**
@@ -155,9 +232,9 @@ class WorkshopController extends Controller
     {
         $user = Auth::user();
 
-        // Allowed for assigned workshop engineer OR superior
-        if ($user->isEngineer() && !$ticket->hasEngineer($user)) {
-            abort(403, 'Only the assigned workshop engineer can mark bench repair complete.');
+        // Allowed for assigned workshop engineer, workshop incharge, OR superior
+        if ($user->isEngineer() && !$ticket->hasEngineer($user) && $ticket->workshop_incharge_id !== $user->id) {
+            abort(403, 'Only the assigned workshop technician or incharge can mark bench repair complete.');
         }
 
         $request->validate([
@@ -179,8 +256,10 @@ class WorkshopController extends Controller
             'ticket_id' => $ticket->id,
             'user_id'   => $user->id,
             'action'    => 'workshop_repaired',
-            'notes'     => "Bench repair completed by Workshop Engineer {$user->name} (Bench Repair Duration: {$benchDuration}). Machine QA tested OK. Summary: {$request->workshop_repair_summary}",
+            'notes'     => "Bench repair completed by Workshop Technician {$user->name} (Bench Repair Duration: {$benchDuration}). Machine QA tested OK. Summary: {$request->workshop_repair_summary}",
         ]);
+
+        \App\Services\NotificationService::notifyWorkshopRepaired($ticket);
 
         return back()->with('success', "Bench repair marked complete! Machine is ready for return delivery to the bank.");
     }
@@ -217,6 +296,8 @@ class WorkshopController extends Controller
             'notes'     => "Repaired machine dispatched back to {$ticket->bank_name} ({$ticket->branch_name}) via {$request->return_courier} (Tracking: {$request->return_tracking_number}). " . ($request->return_dispatch_notes ? "Notes: {$request->return_dispatch_notes}" : ''),
         ]);
 
+        \App\Services\NotificationService::notifyWorkshopReturnDispatched($ticket);
+
         return back()->with('success', "Repaired machine dispatched back to bank branch via {$request->return_courier} (Tracking #{$request->return_tracking_number}).");
     }
 
@@ -248,6 +329,8 @@ class WorkshopController extends Controller
             'action'    => 'workshop_completed_closed',
             'notes'     => "Bank verified delivery. Machine operational. Ticket closed. Turnaround Breakdown -> On-Site Field: {$fieldDuration} | Inbound Cargo: {$inboundTransit} | Workshop Bench: {$workshopDuration} | Return Cargo: {$returnTransit} | Total SLA Resolution: {$totalResolution}.",
         ]);
+
+        \App\Services\NotificationService::notifyTicketClosed($ticket);
 
         return back()->with('success', "Bank receipt confirmed! Ticket #{$ticket->ticket_no} successfully closed with full turnaround metrics logged.");
     }

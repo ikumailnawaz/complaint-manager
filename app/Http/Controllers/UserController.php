@@ -248,10 +248,11 @@ class UserController extends Controller
     protected function getAvailableRoles(): array
     {
         $roles = [
-            'admin'        => 'Operations Admin',
-            'superior'     => 'Superior Manager',
-            'office_staff' => 'Office Staff (Operations & Inventory)',
-            'engineer'     => 'Field Service Engineer',
+            'admin'             => 'Operations Admin',
+            'superior'          => 'Superior Manager',
+            'workshop_incharge' => 'Workshop Incharge / Supervisor',
+            'office_staff'      => 'Office Staff (Operations & Inventory)',
+            'engineer'          => 'Field Service Engineer',
         ];
 
         if (Auth::user()->isSuperAdmin()) {

@@ -56,12 +56,18 @@ class User extends Authenticatable
             'superior', 'admin', 'super_admin',
             'manager', 'operations_manager', 'operation_manager',
             'ops', 'supervisor', 'operations_admin', 'staff', 'office_staff',
+            'workshop_incharge', 'workshop_manager',
         ]);
     }
 
     public function isOfficeStaff(): bool
     {
         return in_array($this->role, ['office_staff', 'staff']);
+    }
+
+    public function isWorkshopIncharge(): bool
+    {
+        return in_array($this->role, ['workshop_incharge', 'workshop_manager']);
     }
 
     public function isOperationsManager(): bool

@@ -27,10 +27,21 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::get('/engineer/tickets', [MobileApiController::class, 'getTickets'])->name('api.engineer.tickets');
     Route::get('/engineer/tickets/{id}', [MobileApiController::class, 'getTicketDetails'])->name('api.engineer.tickets.show');
     Route::post('/engineer/tickets/{id}/feedback', [MobileApiController::class, 'submitFeedback'])->name('api.engineer.tickets.feedback');
+    Route::post('/engineer/tickets/{id}/machine-details', [MobileApiController::class, 'updateMachineDetails'])->name('api.engineer.tickets.machine-details');
     Route::post('/engineer/tickets/{id}/resolve', [MobileApiController::class, 'resolveTicket'])->name('api.engineer.tickets.resolve');
     Route::post('/engineer/tickets/{id}/mark-undone', [MobileApiController::class, 'markUndone'])->name('api.engineer.tickets.mark-undone');
     Route::post('/engineer/tickets/{id}/request-approval', [MobileApiController::class, 'requestApproval'])->name('api.engineer.tickets.request-approval');
     Route::post('/engineer/tickets/{id}/workshop', [MobileApiController::class, 'sendToWorkshop'])->name('api.engineer.tickets.workshop');
+
+    // Central Workshop Hub (Mobile)
+    Route::prefix('workshop')->group(function () {
+        Route::get('/tickets', [MobileApiController::class, 'getWorkshopTickets'])->name('api.workshop.tickets');
+        Route::post('/tickets/{id}/receive', [MobileApiController::class, 'workshopReceive'])->name('api.workshop.receive');
+        Route::post('/tickets/{id}/realign', [MobileApiController::class, 'workshopRealign'])->name('api.workshop.realign');
+        Route::post('/tickets/{id}/resolve', [MobileApiController::class, 'workshopResolve'])->name('api.workshop.resolve');
+        Route::post('/tickets/{id}/return-dispatch', [MobileApiController::class, 'workshopReturnDispatch'])->name('api.workshop.return-dispatch');
+        Route::post('/tickets/{id}/confirm-delivery', [MobileApiController::class, 'workshopConfirmDelivery'])->name('api.workshop.confirm-delivery');
+    });
 
     // Tour Expenses
     Route::get('/engineer/expenses', [MobileApiController::class, 'getExpenses'])->name('api.engineer.expenses');

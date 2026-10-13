@@ -17,6 +17,8 @@ use App\Models\TicketFeedback;
 use App\Models\TicketLog;
 use App\Models\User;
 use App\Services\GeminiService;
+use App\Services\NotificationService;
+use App\Services\WhatsAppService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -190,6 +192,7 @@ class MobileApiController extends Controller
                     'machine_type'       => $t->machine_type,
                     'machine_model'      => $t->machine_model,
                     'machine_serial_no'  => $t->machine_serial_no,
+                    'warranty_status'    => $t->warranty_status,
                     'urgency'            => $t->urgency,
                     'status'             => $t->status,
                     'issue_summary'      => $t->issue_summary,
@@ -215,7 +218,7 @@ class MobileApiController extends Controller
 
         $ticket = Ticket::with(['feedbacks' => function ($q) {
             $q->latest('day_number');
-        }, 'partRequests.items.part', 'expenseClaims'])->findOrFail($id);
+        }, 'partRequests.items.part', 'expenseClaims', 'workshopIncharge', 'workshopEngineer'])->findOrFail($id);
 
         if ($user->isEngineer() && !$ticket->hasEngineer($user) && $ticket->original_field_engineer_id !== $user->id) {
             return response()->json(['success' => false, 'message' => 'Unauthorized access to this complaint.'], 403);
@@ -237,6 +240,14 @@ class MobileApiController extends Controller
                 'machine_type'       => $ticket->machine_type,
                 'machine_model'      => $ticket->machine_model,
                 'machine_serial_no'  => $ticket->machine_serial_no,
+                'warranty_status'    => $ticket->warranty_status,
+                'workshop_incharge_id'   => $ticket->workshop_incharge_id,
+                'workshop_incharge_name' => $ticket->workshopIncharge?->name,
+                'workshop_engineer_id'   => $ticket->workshop_engineer_id,
+                'workshop_engineer_name' => $ticket->workshopEngineer?->name,
+                'workshop_tat_hours'     => $ticket->workshop_tat_hours,
+                'workshop_tat_deadline'  => $ticket->workshop_tat_deadline?->format('d M Y, h:i A'),
+                'workshop_instructions'  => $ticket->workshop_instructions,
                 'urgency'            => $ticket->urgency,
                 'status'             => $ticket->status,
                 'issue_summary'      => $ticket->issue_summary,
@@ -1331,6 +1342,489 @@ class MobileApiController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Notification marked as read.',
+        ]);
+    }
+
+    /**
+     * 7e. Update Machine / Hardware Details on Ticket
+     */
+    public function updateMachineDetails($id, Request $request)
+    {
+        $user = $request->user();
+        $ticket = Ticket::findOrFail($id);
+
+        if ($user->isEngineer() && !$ticket->hasEngineer($user) && $ticket->original_field_engineer_id !== $user->id && $ticket->workshop_engineer_id !== $user->id) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized to update machine details for this ticket.'], 403);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'machine_type'      => 'nullable|string|max:100',
+            'machine_model'     => 'nullable|string|max:100',
+            'machine_serial_no' => 'nullable|string|max:100',
+            'warranty_status'   => 'nullable|string|max:50',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation error.',
+                'errors'  => $validator->errors(),
+            ], 422);
+        }
+
+        $changes = [];
+        if ($request->has('machine_type') && $request->machine_type !== $ticket->machine_type) {
+            $changes[] = "Type: '{$ticket->machine_type}' -> '{$request->machine_type}'";
+            $ticket->machine_type = $request->machine_type;
+        }
+        if ($request->has('machine_model') && $request->machine_model !== $ticket->machine_model) {
+            $changes[] = "Model: '{$ticket->machine_model}' -> '{$request->machine_model}'";
+            $ticket->machine_model = $request->machine_model;
+        }
+        if ($request->has('machine_serial_no') && $request->machine_serial_no !== $ticket->machine_serial_no) {
+            $changes[] = "Serial: '{$ticket->machine_serial_no}' -> '{$request->machine_serial_no}'";
+            $ticket->machine_serial_no = $request->machine_serial_no;
+        }
+        if ($request->has('warranty_status') && $request->warranty_status !== $ticket->warranty_status) {
+            $changes[] = "Warranty: '{$ticket->warranty_status}' -> '{$request->warranty_status}'";
+            $ticket->warranty_status = $request->warranty_status;
+        }
+
+        if (!empty($changes)) {
+            $ticket->save();
+
+            TicketLog::create([
+                'ticket_id' => $ticket->id,
+                'user_id'   => $user->id,
+                'action'    => 'machine_details_updated',
+                'notes'     => "Hardware specs updated by {$user->name}: " . implode(', ', $changes),
+            ]);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Machine details updated successfully.',
+            'ticket'  => [
+                'machine_type'      => $ticket->machine_type,
+                'machine_model'     => $ticket->machine_model,
+                'machine_serial_no' => $ticket->machine_serial_no,
+                'warranty_status'   => $ticket->warranty_status,
+            ],
+        ]);
+    }
+
+    /**
+     * 19. Central Workshop Hub - List Tickets & Overview (Mobile)
+     */
+    public function getWorkshopTickets(Request $request)
+    {
+        $user = $request->user();
+        $tab = $request->input('tab', 'all');
+        $search = $request->input('search');
+
+        // Base query for tickets involved in central workshop
+        $query = Ticket::where(function ($q) {
+            $q->whereIn('status', ['awaiting_workshop', 'in_workshop_repair', 'workshop_repaired', 'return_transit'])
+              ->orWhere(function ($sq) {
+                  $sq->whereIn('status', ['resolved', 'closed'])
+                     ->whereNotNull('workshop_received_at');
+              });
+        });
+
+        // Filter by tab
+        if ($tab === 'awaiting_intake') {
+            $query->where('status', 'awaiting_workshop');
+        } elseif ($tab === 'in_repair') {
+            $query->where('status', 'in_workshop_repair');
+        } elseif ($tab === 'repaired') {
+            $query->where('status', 'workshop_repaired');
+        } elseif ($tab === 'return_transit') {
+            $query->where('status', 'return_transit');
+        } elseif ($tab === 'completed') {
+            $query->whereIn('status', ['resolved', 'closed'])->whereNotNull('workshop_received_at');
+        }
+
+        if (!empty($search)) {
+            $query->where(function ($q) use ($search) {
+                $q->where('ticket_no', 'like', "%{$search}%")
+                  ->orWhere('bank_name', 'like', "%{$search}%")
+                  ->orWhere('branch_name', 'like', "%{$search}%")
+                  ->orWhere('machine_serial_no', 'like', "%{$search}%")
+                  ->orWhere('workshop_dispatch_tracking', 'like', "%{$search}%")
+                  ->orWhere('return_tracking_number', 'like', "%{$search}%");
+            });
+        }
+
+        $tickets = $query->with(['workshopIncharge', 'workshopEngineer', 'activeTicketEngineers.engineer'])
+            ->latest('updated_at')
+            ->get();
+
+        // Count metrics for 5 tabs
+        $awaitingIntakeCount = Ticket::where('status', 'awaiting_workshop')->count();
+        $inRepairCount       = Ticket::where('status', 'in_workshop_repair')->count();
+        $repairedCount       = Ticket::where('status', 'workshop_repaired')->count();
+        $returnTransitCount  = Ticket::where('status', 'return_transit')->count();
+        $completedCount      = Ticket::whereIn('status', ['resolved', 'closed'])->whereNotNull('workshop_received_at')->count();
+
+        // Available bench engineers & incharges for modals
+        $engineers = User::where('role', 'engineer')
+            ->select('id', 'name', 'base_city', 'current_city')
+            ->orderBy('name')
+            ->get();
+
+        $incharges = User::whereIn('role', ['workshop_incharge', 'admin', 'coordinator'])
+            ->select('id', 'name', 'role', 'base_city')
+            ->orderByRaw("FIELD(role, 'workshop_incharge', 'admin', 'coordinator')")
+            ->orderBy('name')
+            ->get();
+
+        $formattedTickets = $tickets->map(function ($t) {
+            return [
+                'id'                          => $t->id,
+                'ticket_no'                   => $t->ticket_no,
+                'customer_ref_no'             => $t->customer_ref_no,
+                'bank_name'                   => $t->bank_name,
+                'branch_name'                 => $t->branch_name,
+                'branch_location'             => $t->branch_location,
+                'machine_type'                => $t->machine_type,
+                'machine_model'               => $t->machine_model,
+                'machine_serial_no'           => $t->machine_serial_no,
+                'warranty_status'             => $t->warranty_status,
+                'status'                      => $t->status,
+                'urgency'                     => $t->urgency,
+                'issue_summary'               => $t->issue_summary,
+                'workshop_location'           => $t->workshop_location ?? 'Lahore Central Workshop',
+                'workshop_dispatched_at'      => $t->workshop_dispatched_at?->format('d M Y, h:i A'),
+                'workshop_dispatch_courier'   => $t->workshop_dispatch_courier,
+                'workshop_dispatch_tracking'  => $t->workshop_dispatch_tracking,
+                'workshop_dispatch_notes'     => $t->workshop_dispatch_notes,
+                'workshop_received_at'        => $t->workshop_received_at?->format('d M Y, h:i A'),
+                'workshop_incharge_id'        => $t->workshop_incharge_id,
+                'workshop_incharge_name'      => $t->workshopIncharge?->name,
+                'workshop_engineer_id'        => $t->workshop_engineer_id,
+                'workshop_engineer_name'      => $t->workshopEngineer?->name,
+                'workshop_tat_hours'          => $t->workshop_tat_hours,
+                'workshop_tat_deadline'       => $t->workshop_tat_deadline?->format('d M Y, h:i A'),
+                'workshop_tat_remaining_hours'=> $t->workshop_tat_deadline ? round(Carbon::now()->diffInHours($t->workshop_tat_deadline, false), 1) : null,
+                'workshop_instructions'       => $t->workshop_instructions,
+                'workshop_intake_remarks'     => $t->workshop_intake_remarks,
+                'workshop_repaired_at'        => $t->workshop_repaired_at?->format('d M Y, h:i A'),
+                'workshop_repair_summary'     => $t->workshop_repair_summary,
+                'return_dispatched_at'        => $t->return_dispatched_at?->format('d M Y, h:i A'),
+                'return_courier'              => $t->return_courier,
+                'return_tracking_number'      => $t->return_tracking_number,
+                'return_dispatch_notes'       => $t->return_dispatch_notes,
+                'bank_received_at'            => $t->bank_received_at?->format('d M Y, h:i A'),
+                'inbound_transit_duration'    => $t->inbound_transit_duration_text,
+                'workshop_repair_duration'    => $t->workshop_repair_duration_text,
+                'return_transit_duration'     => $t->return_transit_duration_text,
+                'total_resolution_duration'   => $t->total_resolution_duration_text,
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'metrics' => [
+                'awaiting_intake' => $awaitingIntakeCount,
+                'in_repair'       => $inRepairCount,
+                'repaired'        => $repairedCount,
+                'return_transit'  => $returnTransitCount,
+                'completed'       => $completedCount,
+                'total'           => $awaitingIntakeCount + $inRepairCount + $repairedCount + $returnTransitCount + $completedCount,
+            ],
+            'tickets'    => $formattedTickets,
+            'engineers'  => $engineers,
+            'incharges'  => $incharges,
+            'permissions'=> [
+                'can_receive' => $user->isSuperior() || $user->isWorkshopIncharge(),
+                'can_realign' => $user->isSuperior() || $user->isWorkshopIncharge(),
+                'can_resolve' => true,
+                'can_dispatch'=> $user->isSuperior() || $user->isWorkshopIncharge(),
+                'can_close'   => $user->isSuperior(),
+            ],
+        ]);
+    }
+
+    /**
+     * 20. Workshop Physical Intake & Handover to Incharge
+     */
+    public function workshopReceive($id, Request $request)
+    {
+        $user = $request->user();
+        if (!$user->isSuperior() && !$user->isWorkshopIncharge()) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized: Only staff/management can confirm physical workshop intake.'], 403);
+        }
+
+        $ticket = Ticket::findOrFail($id);
+
+        $validator = Validator::make($request->all(), [
+            'workshop_incharge_id'    => 'nullable|exists:users,id',
+            'workshop_location'       => 'nullable|string|max:150',
+            'workshop_intake_remarks' => 'required|string|max:500',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Physical inspection remarks are required.',
+                'errors'  => $validator->errors(),
+            ], 422);
+        }
+
+        $incharge = null;
+        if ($request->filled('workshop_incharge_id')) {
+            $incharge = User::find($request->workshop_incharge_id);
+        }
+        if (!$incharge) {
+            $incharge = User::where('role', 'workshop_incharge')->first()
+                ?? User::where('name', 'like', '%ikram%')->first()
+                ?? $user;
+        }
+
+        $location = $request->workshop_location ?: ($ticket->workshop_location ?: 'Lahore Central Workshop');
+        $receivedAt = Carbon::now();
+        $transitDuration = $ticket->inbound_transit_duration_text;
+
+        $ticket->update([
+            'status'                  => 'in_workshop_repair',
+            'workshop_location'       => $location,
+            'workshop_received_at'    => $receivedAt,
+            'workshop_received_by_id' => $user->id,
+            'workshop_incharge_id'    => $incharge->id,
+            'assigned_engineer_id'    => $incharge->id,
+            'workshop_intake_remarks' => $request->workshop_intake_remarks,
+        ]);
+
+        NotificationService::notifyWorkshopReceived($ticket, $incharge);
+
+        try {
+            $whatsapp = app(WhatsAppService::class);
+            $whatsapp->sendWorkshopAlert($ticket, $location, $incharge);
+        } catch (\Throwable $e) {}
+
+        TicketLog::create([
+            'ticket_id' => $ticket->id,
+            'user_id'   => $user->id,
+            'action'    => 'workshop_received',
+            'notes'     => "Machine physically received at {$location} by {$user->name}. Handover complete: Assigned to Workshop Incharge {$incharge->name}. (Inbound Cargo Transit Time: {$transitDuration}). Inspection Remarks: {$request->workshop_intake_remarks}",
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => "Machine received at workshop and handed over to Workshop Incharge {$incharge->name}.",
+            'ticket'  => $ticket,
+        ]);
+    }
+
+    /**
+     * 21. Workshop Incharge Re-aligns Machine to Bench Engineer with TAT
+     */
+    public function workshopRealign($id, Request $request)
+    {
+        $user = $request->user();
+        $ticket = Ticket::findOrFail($id);
+
+        if (!$user->isSuperior() && !$user->isWorkshopIncharge() && $user->id !== $ticket->workshop_incharge_id) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized: Only Workshop Incharge or management can re-align bench tasks.'], 403);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'workshop_engineer_id'  => 'required|exists:users,id',
+            'workshop_tat_hours'    => 'required|integer|min:1|max:720',
+            'workshop_instructions' => 'nullable|string|max:1000',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Please select bench engineer and specify TAT hours.',
+                'errors'  => $validator->errors(),
+            ], 422);
+        }
+
+        $engineer = User::findOrFail($request->workshop_engineer_id);
+        $tatHours = (int) $request->workshop_tat_hours;
+        $tatDeadline = Carbon::now()->addHours($tatHours);
+
+        $ticket->update([
+            'workshop_engineer_id'   => $engineer->id,
+            'assigned_engineer_id'   => $engineer->id,
+            'workshop_tat_hours'     => $tatHours,
+            'workshop_tat_deadline'  => $tatDeadline,
+            'workshop_instructions'  => $request->workshop_instructions,
+            'workshop_realigned_at'  => Carbon::now(),
+        ]);
+
+        if (!$ticket->activeTicketEngineers()->where('engineer_id', $engineer->id)->exists()) {
+            $ticket->ticketEngineers()->create([
+                'engineer_id' => $engineer->id,
+                'role'        => 'support',
+                'assigned_at' => Carbon::now(),
+            ]);
+        }
+
+        TicketLog::create([
+            'ticket_id' => $ticket->id,
+            'user_id'   => $user->id,
+            'action'    => 'workshop_realigned',
+            'notes'     => "Realigned to Bench Engineer {$engineer->name} with TAT of {$tatHours} Hours (Deadline: {$tatDeadline->format('d M Y, h:i A')}). Instructions: {$request->workshop_instructions}",
+        ]);
+
+        NotificationService::notifyWorkshopRealigned($ticket, $engineer, $tatHours, $request->workshop_instructions);
+
+        try {
+            $whatsapp = app(WhatsAppService::class);
+            $whatsapp->sendTicketAssignmentAlert($ticket, $engineer);
+        } catch (\Throwable $e) {}
+
+        return response()->json([
+            'success' => true,
+            'message' => "Machine assigned to Bench Engineer {$engineer->name} with TAT of {$tatHours} hours.",
+            'ticket'  => $ticket,
+        ]);
+    }
+
+    /**
+     * 22. Workshop Bench Repair Completed
+     */
+    public function workshopResolve($id, Request $request)
+    {
+        $user = $request->user();
+        $ticket = Ticket::findOrFail($id);
+
+        if (!$user->isSuperior() && !$user->isWorkshopIncharge() && $user->id !== $ticket->assigned_engineer_id && $user->id !== $ticket->workshop_engineer_id) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized: Only assigned bench tech or incharge can complete repair.'], 403);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'workshop_repair_summary' => 'required|string|max:1000',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Repair summary and testing notes are required.',
+                'errors'  => $validator->errors(),
+            ], 422);
+        }
+
+        $now = Carbon::now();
+        $ticket->update([
+            'status'                  => 'workshop_repaired',
+            'workshop_repaired_at'    => $now,
+            'workshop_repair_summary' => $request->workshop_repair_summary,
+            'resolution_summary'      => $request->workshop_repair_summary,
+        ]);
+
+        NotificationService::notifyWorkshopRepaired($ticket, $user);
+
+        TicketLog::create([
+            'ticket_id' => $ticket->id,
+            'user_id'   => $user->id,
+            'action'    => 'workshop_repaired',
+            'notes'     => "Bench repair completed by {$user->name}. Unit QA tested OK. (Bench Repair Duration: {$ticket->workshop_repair_duration_text}). Summary: {$request->workshop_repair_summary}",
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Bench repair marked complete. Machine tested OK and ready for dispatch back to bank.',
+            'ticket'  => $ticket,
+        ]);
+    }
+
+    /**
+     * 23. Dispatch Repaired Machine Back to Bank Branch
+     */
+    public function workshopReturnDispatch($id, Request $request)
+    {
+        $user = $request->user();
+        if (!$user->isSuperior() && !$user->isWorkshopIncharge()) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized: Only staff/incharge can dispatch returned cargo.'], 403);
+        }
+
+        $ticket = Ticket::findOrFail($id);
+
+        $validator = Validator::make($request->all(), [
+            'return_courier'         => 'required|string|max:150',
+            'return_tracking_number' => 'required|string|max:150',
+            'return_dispatch_notes'  => 'nullable|string|max:500',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Courier service and tracking/bilty number are required.',
+                'errors'  => $validator->errors(),
+            ], 422);
+        }
+
+        $now = Carbon::now();
+        $ticket->update([
+            'status'                 => 'return_transit',
+            'return_courier'         => $request->return_courier,
+            'return_tracking_number' => $request->return_tracking_number,
+            'return_dispatched_at'   => $now,
+            'return_dispatch_notes'  => $request->return_dispatch_notes,
+        ]);
+
+        NotificationService::notifyWorkshopReturnDispatched($ticket);
+
+        TicketLog::create([
+            'ticket_id' => $ticket->id,
+            'user_id'   => $user->id,
+            'action'    => 'workshop_return_dispatched',
+            'notes'     => "Repaired machine dispatched back to bank branch via {$request->return_courier} (Tracking #{$request->return_tracking_number}) by {$user->name}. Notes: {$request->return_dispatch_notes}",
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => "Machine dispatched back to bank via {$request->return_courier} (Tracking #{$request->return_tracking_number}).",
+            'ticket'  => $ticket,
+        ]);
+    }
+
+    /**
+     * 24. Confirm Delivery at Bank Branch & Final Close
+     */
+    public function workshopConfirmDelivery($id, Request $request)
+    {
+        $user = $request->user();
+        if (!$user->isSuperior()) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized: Only office staff or management can confirm final bank delivery.'], 403);
+        }
+
+        $ticket = Ticket::findOrFail($id);
+        $now = Carbon::now();
+
+        $ticket->update([
+            'status'           => 'closed',
+            'bank_received_at' => $now,
+            'resolved_at'      => $ticket->resolved_at ?? $now,
+            'closed_at'        => $now,
+        ]);
+
+        $activeCycle = $ticket->activeCycle();
+        if ($activeCycle) {
+            $activeCycle->update([
+                'status'      => 'closed',
+                'resolved_at' => $activeCycle->resolved_at ?? $now,
+                'closed_at'   => $now,
+            ]);
+        }
+
+        NotificationService::notifyTicketClosed($ticket, $user);
+
+        TicketLog::create([
+            'ticket_id' => $ticket->id,
+            'user_id'   => $user->id,
+            'action'    => 'workshop_bank_delivery_confirmed',
+            'notes'     => "Bank receipt confirmed by {$user->name}. Ticket permanently closed. Total end-to-end resolution turnaround: {$ticket->total_resolution_duration_text}.",
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Machine delivery at bank confirmed! Ticket closed successfully.',
+            'ticket'  => $ticket,
         ]);
     }
 

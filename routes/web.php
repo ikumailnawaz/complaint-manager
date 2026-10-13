@@ -72,6 +72,7 @@ Route::middleware('auth')->group(function () {
         Route::post('/{ticket}/instruct', [TicketController::class, 'addInstruction'])->name('instruct');
         Route::post('/{ticket}/workshop', [TicketController::class, 'reassignWorkshop'])->name('workshop');
         Route::post('/{ticket}/workshop-receive', [\App\Http\Controllers\WorkshopController::class, 'receive'])->name('workshop-receive');
+        Route::post('/{ticket}/workshop-realign', [\App\Http\Controllers\WorkshopController::class, 'realign'])->name('workshop-realign');
         Route::post('/{ticket}/workshop-resolve', [\App\Http\Controllers\WorkshopController::class, 'resolve'])->name('workshop-resolve');
         Route::post('/{ticket}/workshop-return-dispatch', [\App\Http\Controllers\WorkshopController::class, 'returnDispatch'])->name('workshop-return-dispatch');
         Route::post('/{ticket}/workshop-bank-received', [\App\Http\Controllers\WorkshopController::class, 'confirmBankDelivery'])->name('workshop-bank-received');

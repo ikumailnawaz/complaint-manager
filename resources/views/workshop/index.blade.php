@@ -229,10 +229,29 @@
                                     <span>{{ $t->workshop_location ?? 'Central Workshop' }}</span>
                                 </div>
                                 @if($t->workshop_received_at)
-                                    <div class="text-[11px] text-slate-700 font-medium mt-0.5">
-                                        Bench Handler: <strong class="text-purple-800 font-bold">{{ $t->workshopEngineer?->name ?? 'Workshop Tech' }}</strong>
-                                    </div>
-                                    <div class="text-[10px] text-slate-400">
+                                    @if($t->workshopIncharge)
+                                        <div class="text-[10px] text-amber-800 font-medium mt-0.5">
+                                            Incharge: <strong class="text-amber-900 font-bold">{{ $t->workshopIncharge->name }}</strong>
+                                        </div>
+                                    @endif
+                                    @if($t->workshopEngineer)
+                                        <div class="text-[11px] text-slate-700 font-medium mt-0.5">
+                                            Bench Handler: <strong class="text-purple-800 font-bold">{{ $t->workshopEngineer->name }}</strong>
+                                        </div>
+                                    @elseif($t->status === 'in_workshop_repair')
+                                        <div class="text-[10px] text-amber-600 font-semibold mt-0.5">
+                                            <i class="fa-solid fa-triangle-exclamation"></i> Awaiting Bench Tech Alignment
+                                        </div>
+                                    @endif
+                                    @if($t->workshop_tat_hours)
+                                        <div class="text-[10px] text-slate-500 mt-0.5">
+                                            TAT: <span class="font-bold text-slate-700">{{ $t->workshop_tat_hours }}h</span>
+                                            @if($t->workshop_tat_deadline)
+                                                (Due: {{ $t->workshop_tat_deadline->format('d M, h:i A') }})
+                                            @endif
+                                        </div>
+                                    @endif
+                                    <div class="text-[10px] text-slate-400 mt-0.5">
                                         Intake: {{ $t->workshop_received_at->format('d M, h:i A') }} (Transit: {{ $t->inbound_transit_duration_text }})
                                     </div>
                                 @else
@@ -282,13 +301,23 @@
                                         <i class="fa-solid fa-box-open"></i>
                                         <span>Receive at Workshop</span>
                                     </button>
-                                @elseif($t->status === 'in_workshop_repair' && (auth()->user()->isSuperior() || auth()->id() === $t->assigned_engineer_id))
-                                    <button type="button"
-                                            onclick="openWorkshopResolveModal({{ $t->id }}, '{{ $t->ticket_no }}', '{{ addslashes($t->bank_name) }}')"
-                                            class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs shadow-xs transition inline-flex items-center gap-1 cursor-pointer">
-                                        <i class="fa-solid fa-check-double"></i>
-                                        <span>Mark Bench Done</span>
-                                    </button>
+                                @elseif($t->status === 'in_workshop_repair')
+                                    @if(auth()->user()->isSuperior() || auth()->user()->isWorkshopIncharge() || auth()->id() === $t->workshop_incharge_id)
+                                        <button type="button"
+                                                onclick="openWorkshopRealignModal({{ $t->id }}, '{{ $t->ticket_no }}', '{{ addslashes($t->bank_name) }}', {{ $t->workshop_engineer_id ?? 'null' }}, {{ $t->workshop_tat_hours ?? 24 }}, '{{ addslashes($t->workshop_instructions ?? '') }}')"
+                                                class="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg text-xs shadow-xs transition inline-flex items-center gap-1 cursor-pointer">
+                                            <i class="fa-solid fa-user-gear"></i>
+                                            <span>{{ $t->workshop_engineer_id ? 'Realign Bench Tech' : 'Assign Bench Tech' }}</span>
+                                        </button>
+                                    @endif
+                                    @if(auth()->user()->isSuperior() || auth()->id() === $t->assigned_engineer_id || auth()->id() === $t->workshop_engineer_id)
+                                        <button type="button"
+                                                onclick="openWorkshopResolveModal({{ $t->id }}, '{{ $t->ticket_no }}', '{{ addslashes($t->bank_name) }}')"
+                                                class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs shadow-xs transition inline-flex items-center gap-1 cursor-pointer">
+                                            <i class="fa-solid fa-check-double"></i>
+                                            <span>Mark Bench Done</span>
+                                        </button>
+                                    @endif
                                 @elseif(($t->status === 'workshop_repaired' || ($t->status === 'resolved' && $t->workshop_received_at && !$t->bank_received_at)) && auth()->user()->isSuperior())
                                     <button type="button"
                                             onclick="openWorkshopReturnModal({{ $t->id }}, '{{ $t->ticket_no }}', '{{ addslashes($t->bank_name) }}')"

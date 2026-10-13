@@ -510,13 +510,23 @@
                         <i class="fa-solid fa-box-open"></i>
                         <span>Receive at Workshop &amp; Assign Tech</span>
                     </button>
-                @elseif($ticket->status === 'in_workshop_repair' && (auth()->user()->isSuperior() || auth()->id() === $ticket->assigned_engineer_id))
-                    <button type="button"
-                            onclick="openWorkshopResolveModal({{ $ticket->id }}, '{{ $ticket->ticket_no }}', '{{ addslashes($ticket->bank_name) }}')"
-                            class="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs shadow-sm transition inline-flex items-center gap-1.5 cursor-pointer">
-                        <i class="fa-solid fa-check-double"></i>
-                        <span>Mark Bench Done</span>
-                    </button>
+                @elseif($ticket->status === 'in_workshop_repair')
+                    @if(auth()->user()->isSuperior() || auth()->user()->isWorkshopIncharge() || auth()->id() === $ticket->workshop_incharge_id)
+                        <button type="button"
+                                onclick="openWorkshopRealignModal({{ $ticket->id }}, '{{ $ticket->ticket_no }}', '{{ addslashes($ticket->bank_name) }}', {{ $ticket->workshop_engineer_id ?? 'null' }}, {{ $ticket->workshop_tat_hours ?? 24 }}, '{{ addslashes($ticket->workshop_instructions ?? '') }}')"
+                                class="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg text-xs shadow-sm transition inline-flex items-center gap-1.5 cursor-pointer">
+                            <i class="fa-solid fa-user-gear"></i>
+                            <span>{{ $ticket->workshop_engineer_id ? 'Realign Bench Tech' : 'Assign Bench Tech' }}</span>
+                        </button>
+                    @endif
+                    @if(auth()->user()->isSuperior() || auth()->id() === $ticket->assigned_engineer_id || auth()->id() === $ticket->workshop_engineer_id)
+                        <button type="button"
+                                onclick="openWorkshopResolveModal({{ $ticket->id }}, '{{ $ticket->ticket_no }}', '{{ addslashes($ticket->bank_name) }}')"
+                                class="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs shadow-sm transition inline-flex items-center gap-1.5 cursor-pointer">
+                            <i class="fa-solid fa-check-double"></i>
+                            <span>Mark Bench Done</span>
+                        </button>
+                    @endif
                 @elseif($ticket->status === 'workshop_repaired' && auth()->user()->isSuperior())
                     <button type="button"
                             onclick="openWorkshopReturnModal({{ $ticket->id }}, '{{ $ticket->ticket_no }}', '{{ addslashes($ticket->bank_name) }}')"
@@ -1786,12 +1796,22 @@
                     <span>Receive at Workshop &amp; Assign Tech</span>
                 </button>
             @elseif($ticket->status === 'in_workshop_repair')
-                <button type="button" 
-                        onclick="openWorkshopResolveModal({{ $ticket->id }}, '{{ $ticket->ticket_no }}', '{{ addslashes($ticket->bank_name) }}')"
-                        class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs shadow-sm transition flex items-center space-x-1.5 cursor-pointer">
-                    <i class="fa-solid fa-check-double"></i>
-                    <span>Mark Bench Repair Done</span>
-                </button>
+                @if(auth()->user()->isSuperior() || auth()->user()->isWorkshopIncharge() || auth()->id() === $ticket->workshop_incharge_id)
+                    <button type="button" 
+                            onclick="openWorkshopRealignModal({{ $ticket->id }}, '{{ $ticket->ticket_no }}', '{{ addslashes($ticket->bank_name) }}', {{ $ticket->workshop_engineer_id ?? 'null' }}, {{ $ticket->workshop_tat_hours ?? 24 }}, '{{ addslashes($ticket->workshop_instructions ?? '') }}')"
+                            class="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg text-xs shadow-sm transition flex items-center space-x-1.5 cursor-pointer">
+                        <i class="fa-solid fa-user-gear"></i>
+                        <span>{{ $ticket->workshop_engineer_id ? 'Realign Bench Tech' : 'Assign Bench Tech' }}</span>
+                    </button>
+                @endif
+                @if(auth()->user()->isSuperior() || auth()->id() === $ticket->assigned_engineer_id || auth()->id() === $ticket->workshop_engineer_id)
+                    <button type="button" 
+                            onclick="openWorkshopResolveModal({{ $ticket->id }}, '{{ $ticket->ticket_no }}', '{{ addslashes($ticket->bank_name) }}')"
+                            class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs shadow-sm transition flex items-center space-x-1.5 cursor-pointer">
+                        <i class="fa-solid fa-check-double"></i>
+                        <span>Mark Bench Repair Done</span>
+                    </button>
+                @endif
             @elseif($ticket->status === 'workshop_repaired')
                 <button type="button" 
                         onclick="openWorkshopReturnModal({{ $ticket->id }}, '{{ $ticket->ticket_no }}', '{{ addslashes($ticket->bank_name) }}')"
