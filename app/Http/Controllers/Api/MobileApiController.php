@@ -1419,6 +1419,13 @@ class MobileApiController extends Controller
     public function getWorkshopTickets(Request $request)
     {
         $user = $request->user();
+        if (!$user->isSuperior() && !$user->isWorkshopIncharge()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Access Restricted: Central Workshop Hub is reserved for Workshop Incharge, Office Staff, and Administrators only.',
+            ], 403);
+        }
+
         $tab = $request->input('tab', 'all');
         $search = $request->input('search');
 
@@ -1472,10 +1479,12 @@ class MobileApiController extends Controller
             ->orderBy('name')
             ->get();
 
-        $incharges = User::whereIn('role', ['workshop_incharge', 'admin', 'coordinator'])
+        $incharges = User::where(function ($q) {
+            $q->whereIn('role', ['workshop_incharge', 'office_staff', 'admin', 'coordinator'])
+              ->orWhere('name', 'like', '%ikram%');
+        })
             ->select('id', 'name', 'role', 'base_city')
-            ->orderByRaw("FIELD(role, 'workshop_incharge', 'admin', 'coordinator')")
-            ->orderBy('name')
+            ->orderByRaw("CASE WHEN role = 'workshop_incharge' THEN 1 WHEN name LIKE '%ikram%' THEN 2 ELSE 3 END, name ASC")
             ->get();
 
         $formattedTickets = $tickets->map(function ($t) {

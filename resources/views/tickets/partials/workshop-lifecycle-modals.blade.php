@@ -22,8 +22,13 @@
                     Assign Workshop Incharge (Handover to) <span class="text-rose-500">*</span>
                 </label>
                 @php
-                    $inchargeUsers = \App\Models\User::whereIn('role', ['workshop_incharge', 'admin', 'coordinator'])->orderBy('name')->get();
-                    $defaultIncharge = \App\Models\User::where('role', 'workshop_incharge')->first() ?? \App\Models\User::where('name', 'like', '%ikram%')->first();
+                    $inchargeUsers = \App\Models\User::where(function($q) {
+                        $q->whereIn('role', ['workshop_incharge', 'office_staff', 'admin', 'coordinator'])
+                          ->orWhere('name', 'like', '%ikram%');
+                    })->orderByRaw("CASE WHEN role = 'workshop_incharge' THEN 1 WHEN name LIKE '%ikram%' THEN 2 ELSE 3 END, name ASC")->get();
+                    $defaultIncharge = \App\Models\User::where('role', 'workshop_incharge')->first()
+                        ?? \App\Models\User::where('name', 'like', '%ikram%')->first()
+                        ?? $inchargeUsers->first();
                 @endphp
                 <select name="workshop_incharge_id" required class="w-full border border-slate-300 rounded-xl p-2.5 text-xs focus:ring-2 focus:ring-purple-500 focus:outline-none bg-white">
                     @foreach($inchargeUsers as $inc)
