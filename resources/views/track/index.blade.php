@@ -97,7 +97,7 @@
                                 type="text" 
                                 name="ticket_no" 
                                 value="{{ old('ticket_no', $searchedQuery ?? '') }}"
-                                placeholder="Enter Complaint # (e.g. CMP-2026-00086 or [CMP-2026-00086]) or Bank Ref" 
+                                placeholder="Enter Complaint # or Bank Reference" 
                                 required
                                 autofocus
                                 class="w-full pl-3 pr-4 py-3 text-sm text-slate-900 placeholder-slate-400 focus:outline-none font-medium"
@@ -108,16 +108,6 @@
                             <span>Track Status</span>
                         </button>
                     </form>
-
-                    <!-- Helpful Format Hints -->
-                    <div class="mt-3 flex flex-wrap items-center justify-center gap-1.5 text-[11px] text-slate-400">
-                        <span class="font-medium text-slate-300">Accepts:</span>
-                        <code class="px-1.5 py-0.5 bg-slate-800/80 rounded border border-slate-700 text-sky-300 font-mono">[CMP-2026-00086]</code>
-                        <code class="px-1.5 py-0.5 bg-slate-800/80 rounded border border-slate-700 text-sky-300 font-mono">CMP202600086</code>
-                        <code class="px-1.5 py-0.5 bg-slate-800/80 rounded border border-slate-700 text-sky-300 font-mono">cmp-2026-00086</code>
-                        <span class="text-slate-400">&bull; Bank References:</span>
-                        <code class="px-1.5 py-0.5 bg-slate-800/80 rounded border border-slate-700 text-emerald-300 font-mono">UBL-127997</code>
-                    </div>
                 </div>
             </div>
         </section>
@@ -520,9 +510,9 @@
                             <div class="w-8 h-8 rounded-lg bg-sky-100 text-sky-700 flex items-center justify-center text-sm font-bold mb-2">
                                 <i class="fa-solid fa-hashtag"></i>
                             </div>
-                            <h3 class="text-xs font-bold text-slate-900">Flexible Search Formats</h3>
+                            <h3 class="text-xs font-bold text-slate-900">Flexible Search Support</h3>
                             <p class="text-[11px] text-slate-500 mt-1">
-                                Enter formats like <code class="text-sky-700">[CMP-2026-00086]</code>, <code class="text-sky-700">CMP202600086</code>, or bank dispatch reference.
+                                Search directly using your complaint ticket number or bank reference.
                             </p>
                         </div>
 
