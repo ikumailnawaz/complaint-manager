@@ -22,11 +22,18 @@ use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
 
 
+use App\Http\Controllers\PublicTrackController;
+
 /*
 |--------------------------------------------------------------------------
 | Web Routes
 |--------------------------------------------------------------------------
 */
+
+// Public Ticket Tracking Portal
+Route::get('/track', [PublicTrackController::class, 'index'])->name('track.index');
+Route::post('/track', [PublicTrackController::class, 'search'])->name('track.search');
+Route::get('/track/{ticket_no}', [PublicTrackController::class, 'show'])->name('track.show');
 
 // Authentication
 Route::get('/login', [AuthController::class, 'showLogin'])->name('login');

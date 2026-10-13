@@ -124,6 +124,8 @@ class MailService
             $branchDetails = htmlspecialchars($ticket->branch_name ? ($ticket->branch_name . ($ticket->branch_code ? " — Branch Code: {$ticket->branch_code}" : '') . ($ticket->branch_location ? "<br>{$ticket->branch_location}" : '')) : ($ticket->branch_location ?? 'Branch on record'));
             $contactInfo = htmlspecialchars(($ticket->customer_name ?: 'Operations') . ($ticket->customer_mobile ? " | {$ticket->customer_mobile}" : ''));
 
+            $trackingUrl = url('/track/' . rawurlencode($ticket->ticket_no));
+
             $notesRow = '';
             if (!empty($customNotes)) {
                 $safeNotes = nl2br(htmlspecialchars($customNotes));
@@ -143,6 +145,49 @@ class MailService
                 </tr>
 NOTE;
             }
+
+            $trackingRow = <<<TRACK
+                <!-- LIVE TICKET PROGRESS TRACKING -->
+                <tr>
+                    <td style="padding:0 30px 24px 30px;">
+                        <table width="100%" cellpadding="0" cellspacing="0" style="
+                            background:#f0f9ff;
+                            border:1px solid #bae6fd;
+                            border-radius:6px;
+                            padding:16px 18px;
+                        ">
+                            <tr>
+                                <td valign="middle">
+                                    <div style="font-size:11px;font-weight:bold;color:#0369a1;text-transform:uppercase;letter-spacing:.6px;">
+                                        Real-Time Ticket Progress &amp; Milestone Tracking
+                                    </div>
+                                    <div style="margin-top:4px;font-size:13px;line-height:1.5;color:#0c4a6e;">
+                                        To view live ticket progress, daily engineer updates, workshop status, and resolution history, please visit our online tracking portal:
+                                    </div>
+                                    <div style="margin-top:10px;">
+                                        <a href="{$trackingUrl}" target="_blank" style="
+                                            display:inline-block;
+                                            background:#0284c7;
+                                            color:#ffffff;
+                                            font-size:12px;
+                                            font-weight:bold;
+                                            text-decoration:none;
+                                            padding:9px 18px;
+                                            border-radius:5px;
+                                            letter-spacing:.3px;
+                                        ">
+                                            Track Ticket Progress Online &rarr;
+                                        </a>
+                                    </div>
+                                    <div style="margin-top:8px;font-size:11px;color:#64748b;word-break:break-all;">
+                                        Direct Link: <a href="{$trackingUrl}" target="_blank" style="color:#0284c7;text-decoration:underline;">{$trackingUrl}</a>
+                                    </div>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+TRACK;
 
             $html = <<<HTML
 <!DOCTYPE html>
@@ -597,6 +642,8 @@ NOTE;
 
                 {$notesRow}
 
+                {$trackingRow}
+
                 <!-- ACTION REQUIRED -->
                 <tr>
                     <td style="padding:0 30px 28px 30px;">
@@ -755,7 +802,7 @@ HTML;
 
             $mail->isHTML(true);
             $mail->Body    = $html;
-            $mail->AltBody = "Dear {$bankName} Operations Team,\n\nYour complaint has been assigned to Field Engineer: {$engineerName} ({$engineerCity}).\nTicket No: {$ticketNo}\nPriority: {$urgencyBadge}\nExpected Resolution: Within Defined TAT\nCMS Company Support." . $threadChainText;
+            $mail->AltBody = "Dear {$bankName} Operations Team,\n\nYour complaint has been assigned to Field Engineer: {$engineerName} ({$engineerCity}).\nTicket No: {$ticketNo}\nPriority: {$urgencyBadge}\nExpected Resolution: Within Defined TAT\n\nTo view real-time ticket progress, daily feedback, and service milestones, visit:\n{$trackingUrl}\n\nCMS Company Support." . $threadChainText;
 
             $mail->send();
             $messageId = $mail->getLastMessageID() ?: ('<' . uniqid('msg.') . '@' . (config('mail.host_domain') ?: env('MAIL_HOST_DOMAIN', 'cmscompany.biz')) . '>');

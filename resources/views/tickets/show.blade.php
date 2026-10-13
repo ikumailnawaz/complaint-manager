@@ -1383,6 +1383,10 @@
                         @endif
                         <div>Engineer: {{ $ticket->engineer?->name }} ({{ $ticket->engineer?->phone_whatsapp }})</div>
                         <div>Target SLA: <strong>{{ $ticket->sla_deadline ? $ticket->sla_deadline->format('d M, h:i A') : $ticket->expectedResponseHours() . ' hours' }}</strong></div>
+                        <div class="pt-1.5 border-t border-sky-200/60 flex items-center justify-between text-[10px]">
+                            <span class="text-sky-800 font-semibold"><i class="fa-solid fa-satellite-dish text-sky-600 mr-1"></i> Public Tracking Link:</span>
+                            <a href="{{ url('/track/' . rawurlencode($ticket->ticket_no)) }}" target="_blank" class="font-mono text-sky-700 font-bold hover:underline">/track/{{ $ticket->ticket_no }} &rarr;</a>
+                        </div>
                     </div>
                 @endif
             </div>
@@ -1489,6 +1493,26 @@
                                                     <span class="text-slate-500">Branch Contact:</span>
                                                     <span class="font-bold text-slate-900">{{ $ticket->customer_name }} | {{ $ticket->customer_mobile ?? 'N/A' }}</span>
                                                 </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Live Courier Tracking Portal Section -->
+                                        <div class="bg-sky-50 border border-sky-200 rounded p-2.5 space-y-1.5 text-[11px]">
+                                            <div class="font-bold text-sky-900 flex items-center justify-between">
+                                                <span class="flex items-center space-x-1">
+                                                    <i class="fa-solid fa-truck-fast text-sky-600"></i>
+                                                    <span>Real-Time Ticket Progress &amp; Milestone Tracking</span>
+                                                </span>
+                                                <span class="text-[9px] bg-sky-200 text-sky-900 px-1.5 py-0.5 rounded font-bold">COURIER PORTAL</span>
+                                            </div>
+                                            <div class="text-[10.5px] text-sky-800">
+                                                To view live ticket progress, daily engineer updates, workshop status, and resolution history, please visit our online tracking portal:
+                                            </div>
+                                            <div class="pt-1 flex items-center justify-between">
+                                                <a href="{{ url('/track/' . rawurlencode($ticket->ticket_no)) }}" target="_blank" class="px-2.5 py-1 bg-sky-600 hover:bg-sky-700 text-white rounded text-[10px] font-bold inline-flex items-center space-x-1">
+                                                    <span>Track Ticket Progress Online &rarr;</span>
+                                                </a>
+                                                <span class="font-mono text-[9.5px] text-sky-700">{{ url('/track/' . rawurlencode($ticket->ticket_no)) }}</span>
                                             </div>
                                         </div>
 
