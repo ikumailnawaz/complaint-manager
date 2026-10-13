@@ -59,7 +59,7 @@ class UserResetSeeder extends Seeder
             ],
             [
                 'fullname' => 'ikram',
-                'role'     => 'engineer',
+                'role'     => 'office_staff',
                 'city'     => 'Lahore',
             ],
             [

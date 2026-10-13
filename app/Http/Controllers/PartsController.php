@@ -30,14 +30,14 @@ class PartsController extends Controller
 
     public function partsCreate()
     {
-        abort_unless(auth()->user()->isAdmin(), 403);
+        abort_unless(auth()->user()->isAdmin() || auth()->user()->isOfficeStaff(), 403);
         $models = MachineModel::orderBy('name')->get();
         return view('parts.master.parts.form', compact('models'));
     }
 
     public function partsStore(Request $request)
     {
-        abort_unless(auth()->user()->isAdmin(), 403);
+        abort_unless(auth()->user()->isAdmin() || auth()->user()->isOfficeStaff(), 403);
         $data = $request->validate([
             'part_number' => 'required|string|max:100|unique:parts',
             'name'        => 'required|string|max:255',
@@ -57,7 +57,7 @@ class PartsController extends Controller
 
     public function partsEdit(Part $part)
     {
-        abort_unless(auth()->user()->isAdmin(), 403);
+        abort_unless(auth()->user()->isAdmin() || auth()->user()->isOfficeStaff(), 403);
         $models = MachineModel::orderBy('name')->get();
         $selectedModelIds = $part->machineModels()->pluck('machine_models.id')->toArray();
         return view('parts.master.parts.form', compact('part', 'models', 'selectedModelIds'));
@@ -65,7 +65,7 @@ class PartsController extends Controller
 
     public function partsUpdate(Request $request, Part $part)
     {
-        abort_unless(auth()->user()->isAdmin(), 403);
+        abort_unless(auth()->user()->isAdmin() || auth()->user()->isOfficeStaff(), 403);
         $data = $request->validate([
             'part_number'   => 'required|string|max:100|unique:parts,part_number,' . $part->id,
             'name'          => 'required|string|max:255',
@@ -96,7 +96,7 @@ class PartsController extends Controller
 
     public function partsToggleActive(Part $part)
     {
-        abort_unless(auth()->user()->isAdmin(), 403);
+        abort_unless(auth()->user()->isAdmin() || auth()->user()->isOfficeStaff(), 403);
         $part->update(['is_active' => !$part->is_active]);
         return back()->with('success', 'Part ' . ($part->is_active ? 'activated' : 'deactivated') . '.');
     }
@@ -111,7 +111,7 @@ class PartsController extends Controller
 
     public function modelsStore(Request $request)
     {
-        abort_unless(auth()->user()->isAdmin(), 403);
+        abort_unless(auth()->user()->isAdmin() || auth()->user()->isOfficeStaff(), 403);
         $data = $request->validate([
             'name'         => 'required|string|max:200',
             'manufacturer' => 'nullable|string|max:100',
@@ -124,7 +124,7 @@ class PartsController extends Controller
 
     public function modelsUpdate(Request $request, MachineModel $model)
     {
-        abort_unless(auth()->user()->isAdmin(), 403);
+        abort_unless(auth()->user()->isAdmin() || auth()->user()->isOfficeStaff(), 403);
         $data = $request->validate([
             'name'         => 'required|string|max:200',
             'manufacturer' => 'nullable|string|max:100',
@@ -148,7 +148,7 @@ class PartsController extends Controller
 
     public function modelsAttachPart(Request $request, MachineModel $model)
     {
-        abort_unless(auth()->user()->isAdmin(), 403);
+        abort_unless(auth()->user()->isAdmin() || auth()->user()->isOfficeStaff(), 403);
         $data = $request->validate(['part_id' => 'required|exists:parts,id', 'is_common' => 'sometimes|boolean']);
         $model->parts()->syncWithoutDetaching([$data['part_id'] => ['is_common' => $request->boolean('is_common')]]);
         return back()->with('success', 'Part attached to model.');
@@ -156,7 +156,7 @@ class PartsController extends Controller
 
     public function modelsDetachPart(MachineModel $model, Part $part)
     {
-        abort_unless(auth()->user()->isAdmin(), 403);
+        abort_unless(auth()->user()->isAdmin() || auth()->user()->isOfficeStaff(), 403);
         $model->parts()->detach($part->id);
         return back()->with('success', 'Part removed from model.');
     }
@@ -165,14 +165,14 @@ class PartsController extends Controller
 
     public function locationsIndex()
     {
-        abort_unless(auth()->user()->isAdmin(), 403);
+        abort_unless(auth()->user()->isAdmin() || auth()->user()->isOfficeStaff(), 403);
         $locations = Location::withCount('grns')->orderBy('name')->get();
         return view('parts.master.locations.index', compact('locations'));
     }
 
     public function locationsStore(Request $request)
     {
-        abort_unless(auth()->user()->isAdmin(), 403);
+        abort_unless(auth()->user()->isAdmin() || auth()->user()->isOfficeStaff(), 403);
         $data = $request->validate([
             'name'    => 'required|string|max:200',
             'city'    => 'nullable|string|max:100',
@@ -185,7 +185,7 @@ class PartsController extends Controller
 
     public function locationsUpdate(Request $request, Location $location)
     {
-        abort_unless(auth()->user()->isAdmin(), 403);
+        abort_unless(auth()->user()->isAdmin() || auth()->user()->isOfficeStaff(), 403);
         $data = $request->validate([
             'name'    => 'required|string|max:200',
             'city'    => 'nullable|string|max:100',

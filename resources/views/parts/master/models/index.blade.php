@@ -100,7 +100,7 @@
                                             <div class="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-xs text-slate-700 shadow-2xs">
                                                 <span class="font-mono text-slate-400 text-[10px]">{{ $part->part_number }}</span>
                                                 <span class="font-medium">{{ $part->name }}</span>
-                                                @if(auth()->user()->isAdmin())
+                                                @if(auth()->user()->isAdmin() || auth()->user()->isOfficeStaff())
                                                 <form action="{{ route('parts.master.models.detach-part', [$model, $part]) }}" method="POST" class="inline ml-1">
                                                     @csrf
                                                     @method('DELETE')
@@ -115,7 +115,7 @@
                                         @endforelse
                                     </div>
 
-                                    @if(auth()->user()->isAdmin())
+                                    @if(auth()->user()->isAdmin() || auth()->user()->isOfficeStaff())
                                     <!-- Quick Attach Part Form -->
                                     <form action="{{ route('parts.master.models.attach-part', $model) }}" method="POST" class="flex items-center space-x-2 pt-2">
                                         @csrf
@@ -144,7 +144,7 @@
 
         <!-- Right 1 Col: Add New Model Card -->
         <div class="space-y-4">
-            @if(auth()->user()->isAdmin())
+            @if(auth()->user()->isAdmin() || auth()->user()->isOfficeStaff())
             <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
                 <h2 class="text-sm font-bold text-slate-900 mb-1 flex items-center space-x-1.5">
                     <i class="fa-solid fa-plus-circle text-emerald-600"></i>

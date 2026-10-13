@@ -20,16 +20,16 @@
                 Active unresolved bank complaints. Operations Administrators record daily progress updates and monitor field SLA.
             </p>
         </div>
-        @if(!auth()->user()->isOfficeStaff())
         <div class="flex flex-wrap items-center gap-2">
             <a href="{{ route('tickets.index') }}" class="inline-flex items-center px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition">
                 <i class="fa-solid fa-list-check mr-1.5 text-slate-500"></i> All Tickets Registry
             </a>
+            @if(!auth()->user()->isEngineer())
             <a href="{{ route('tickets.create') }}" class="inline-flex items-center px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold rounded-xl shadow-sm hover:shadow transition">
                 <i class="fa-solid fa-plus mr-1.5"></i> Register Complaint
             </a>
+            @endif
         </div>
-        @endif
     </div>
 
     <!-- Active SLA Metric Counters -->
@@ -83,53 +83,70 @@
 
     <!-- Filter Bar -->
     <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4">
-        <form action="{{ route('tickets.open') }}" method="GET" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 text-xs">
-            <div class="lg:col-span-4">
-                <label class="block font-semibold text-slate-700 mb-1">Search Open Tickets</label>
-                <div class="relative">
-                    <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400">
-                        <i class="fa-solid fa-magnifying-glass"></i>
-                    </span>
-                    <input type="text" name="search" value="{{ request('search') }}" 
-                        placeholder="Search Ticket #, Bank, Serial, City, Contact..." 
-                        class="w-full pl-9 pr-3 py-2 bg-white border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-sky-500">
+        <form action="{{ route('tickets.open') }}" method="GET" class="space-y-3 text-xs">
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-12 gap-3">
+                <div class="lg:col-span-3">
+                    <label class="block font-semibold text-slate-700 mb-1">Search Open Tickets</label>
+                    <div class="relative">
+                        <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400">
+                            <i class="fa-solid fa-magnifying-glass"></i>
+                        </span>
+                        <input type="text" name="search" value="{{ request('search') }}" 
+                            placeholder="Search Ticket #, Bank, Serial, City..." 
+                            class="w-full pl-9 pr-3 py-2 bg-white border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-sky-500">
+                    </div>
                 </div>
-            </div>
 
-            <div class="lg:col-span-2">
-                <label class="block font-semibold text-slate-700 mb-1">Status</label>
-                <select name="status" class="w-full bg-white border border-slate-300 rounded-xl py-2 px-2.5 text-xs focus:ring-2 focus:ring-sky-500" onchange="this.form.submit()">
-                    <option value="">All Open Statuses</option>
-                    <option value="open" {{ request('status') === 'open' ? 'selected' : '' }}>Open (Unassigned)</option>
-                    <option value="assigned" {{ request('status') === 'assigned' ? 'selected' : '' }}>Assigned</option>
-                    <option value="in_progress" {{ request('status') === 'in_progress' ? 'selected' : '' }}>In Progress</option>
-                    <option value="awaiting_workshop" {{ request('status') === 'awaiting_workshop' ? 'selected' : '' }}>Awaiting Workshop</option>
-                    <option value="escalated" {{ request('status') === 'escalated' ? 'selected' : '' }}>Escalated</option>
-                </select>
-            </div>
+                <div class="lg:col-span-2">
+                    <label class="block font-semibold text-slate-700 mb-1">Field Engineer</label>
+                    <select name="engineer_id" class="w-full bg-white border border-slate-300 rounded-xl py-2 px-2.5 text-xs focus:ring-2 focus:ring-sky-500" onchange="this.form.submit()">
+                        <option value="">All Engineers</option>
+                        <option value="unassigned" {{ request('engineer_id') === 'unassigned' ? 'selected' : '' }}>-- Unassigned --</option>
+                        @foreach($engineers as $eng)
+                            <option value="{{ $eng->id }}" {{ request('engineer_id') == $eng->id ? 'selected' : '' }}>
+                                {{ $eng->name }} {{ $eng->base_city ? "({$eng->base_city})" : '' }}
+                            </option>
+                        @endforeach
+                    </select>
+                </div>
 
-            <div class="lg:col-span-2">
-                <label class="block font-semibold text-slate-700 mb-1">Urgency</label>
-                <select name="urgency" class="w-full bg-white border border-slate-300 rounded-xl py-2 px-2.5 text-xs focus:ring-2 focus:ring-sky-500" onchange="this.form.submit()">
-                    <option value="">All Urgencies</option>
-                    <option value="high" {{ request('urgency') === 'high' ? 'selected' : '' }}>High Priority</option>
-                    <option value="medium" {{ request('urgency') === 'medium' ? 'selected' : '' }}>Medium</option>
-                    <option value="low" {{ request('urgency') === 'low' ? 'selected' : '' }}>Low</option>
-                </select>
-            </div>
+                <div class="lg:col-span-2">
+                    <label class="block font-semibold text-slate-700 mb-1">Status</label>
+                    <select name="status" class="w-full bg-white border border-slate-300 rounded-xl py-2 px-2.5 text-xs focus:ring-2 focus:ring-sky-500" onchange="this.form.submit()">
+                        <option value="">All Open Statuses</option>
+                        <option value="open" {{ request('status') === 'open' ? 'selected' : '' }}>Open (Unassigned)</option>
+                        <option value="assigned" {{ request('status') === 'assigned' ? 'selected' : '' }}>Assigned</option>
+                        <option value="in_progress" {{ request('status') === 'in_progress' ? 'selected' : '' }}>In Progress</option>
+                        <option value="awaiting_workshop" {{ request('status') === 'awaiting_workshop' ? 'selected' : '' }}>Awaiting Workshop</option>
+                        <option value="escalated" {{ request('status') === 'escalated' ? 'selected' : '' }}>Escalated</option>
+                    </select>
+                </div>
 
-            <div class="lg:col-span-2">
-                <label class="block font-semibold text-slate-700 mb-1">City / Region</label>
-                <input type="text" name="location" value="{{ request('location') }}" placeholder="e.g. Lahore, Karachi" class="w-full bg-white border border-slate-300 rounded-xl py-2 px-2.5 text-xs">
-            </div>
+                <div class="lg:col-span-2">
+                    <label class="block font-semibold text-slate-700 mb-1">Urgency</label>
+                    <select name="urgency" class="w-full bg-white border border-slate-300 rounded-xl py-2 px-2.5 text-xs focus:ring-2 focus:ring-sky-500" onchange="this.form.submit()">
+                        <option value="">All Urgencies</option>
+                        <option value="high" {{ request('urgency') === 'high' ? 'selected' : '' }}>High Priority</option>
+                        <option value="medium" {{ request('urgency') === 'medium' ? 'selected' : '' }}>Medium</option>
+                        <option value="low" {{ request('urgency') === 'low' ? 'selected' : '' }}>Low</option>
+                    </select>
+                </div>
 
-            <div class="lg:col-span-2 flex items-end space-x-2">
-                <button type="submit" class="w-full py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-xl text-xs transition">
-                    Filter
-                </button>
-                <a href="{{ route('tickets.open') }}" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-semibold">
-                    Clear
-                </a>
+                <div class="lg:col-span-2">
+                    <label class="block font-semibold text-slate-700 mb-1">City / Region</label>
+                    <input type="text" name="location" value="{{ request('location') }}" placeholder="e.g. Lahore, Karachi" class="w-full bg-white border border-slate-300 rounded-xl py-2 px-2.5 text-xs">
+                </div>
+
+                <div class="lg:col-span-1 flex items-end space-x-1.5">
+                    <button type="submit" class="w-full py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-xl text-xs transition" title="Apply filter">
+                        Filter
+                    </button>
+                    @if(request()->hasAny(['search', 'engineer_id', 'status', 'urgency', 'location']))
+                    <a href="{{ route('tickets.open') }}" class="px-2.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-semibold" title="Reset filter">
+                        <i class="fa-solid fa-rotate-left"></i>
+                    </a>
+                    @endif
+                </div>
             </div>
         </form>
     </div>

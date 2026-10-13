@@ -141,15 +141,13 @@
                         </div>
                         @endif
 
-                        @if(!$isOfficeStaffUser)
-                        <!-- Complain Registry (Visible to Super Admin, Admin, Engineer) -->
+                        <!-- Complain Registry (Visible to Super Admin, Admin, Office Staff, Engineer) -->
                         <a href="{{ route('tickets.index') }}" class="flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs {{ request()->routeIs('tickets.index') || (request()->routeIs('tickets.show') && !request()->routeIs('tickets.open')) ? 'bg-slate-800 text-sky-400 font-bold border-l-2 border-sky-400 pl-2' : 'text-slate-200 hover:text-white hover:bg-slate-800/80 font-medium' }} transition">
                             <span><i class="fa-solid fa-list-check mr-1.5 text-[10px]"></i> Complain Registry</span>
                             @if($isEngineerUser && $myComplaintsCount > 0)
                                 <span class="px-1.5 py-0.2 bg-sky-500 text-white font-bold text-[9px] rounded-full">{{ $myComplaintsCount }}</span>
                             @endif
                         </a>
-                        @endif
 
                         @if(!$isEngineerUser)
                         <!-- Open Ticket (Visible to Super Admin, Admin, Office Staff) -->
@@ -159,10 +157,8 @@
                                 <span class="px-1.5 py-0.2 bg-amber-500 text-slate-950 font-black text-[9px] rounded-full">{{ $openCount }}</span>
                             @endif
                         </a>
-                        @endif
 
-                        @if(!$isEngineerUser && !$isOfficeStaffUser)
-                        <!-- Escalated Ticket (Visible to Super Admin, Admin) -->
+                        <!-- Escalated Ticket (Visible to Super Admin, Admin, Office Staff) -->
                         <a href="{{ route('tickets.escalations') }}" class="flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs {{ request()->routeIs('tickets.escalations') ? 'bg-slate-800 text-rose-400 font-bold border-l-2 border-rose-400 pl-2' : 'text-slate-200 hover:text-white hover:bg-slate-800/80 font-medium' }} transition">
                             <span><i class="fa-solid fa-triangle-exclamation mr-1.5 text-[10px]"></i> Escalated Tickets</span>
                             @if(isset($escCount) && $escCount > 0)
@@ -170,6 +166,7 @@
                             @endif
                         </a>
 
+                        @if(!$isOfficeStaffUser)
                         <!-- Mail Sync (Webmail & Ingest) (Visible to Super Admin, Admin) -->
                         <a href="{{ route('settings.email') }}" class="flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs {{ request()->routeIs('settings.*') ? 'bg-slate-800 text-cyan-400 font-bold border-l-2 border-cyan-400 pl-2' : 'text-slate-200 hover:text-white hover:bg-slate-800/80 font-medium' }} transition">
                             <span><i class="fa-solid fa-inbox mr-1.5 text-[10px]"></i> Mail Sync (Webmail &amp; Ingest)</span>
@@ -177,6 +174,7 @@
                                 <span class="px-1.5 py-0.2 bg-sky-500 text-white font-bold text-[9px] rounded-full">{{ $unassignedEmailCount }}</span>
                             @endif
                         </a>
+                        @endif
                         @endif
                     </div>
                 </details>
@@ -385,7 +383,7 @@
                             <span><i class="fa-solid fa-truck-ramp-box mr-1.5 text-[10px]"></i> Location Transfers</span>
                         </a>
 
-                        @if(auth()->user()->isAdmin())
+                        @if(auth()->user()->isAdmin() || auth()->user()->isOfficeStaff())
                         <!-- Master Catalog -->
                         <div class="pt-1 mt-1 border-t border-slate-700">
                             <div class="px-2.5 py-1 text-[10px] font-bold text-slate-300 uppercase tracking-wider">Master Catalog</div>

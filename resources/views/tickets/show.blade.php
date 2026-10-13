@@ -889,13 +889,12 @@
                 <form action="{{ route('tickets.finalize', $ticket) }}" method="POST" class="space-y-4">
                     @csrf
 
-                    <fieldset @disabled(auth()->user()->isEngineer()) class="space-y-4">
-                    <!-- Card 1: Machine Hardware & Warranty (Editable) -->
+                    <!-- Card 1: Machine Hardware & Warranty (Editable for Operators & Engineers) -->
                     <div class="bg-slate-50/60 p-4 rounded-xl border border-slate-200 space-y-3">
                         <div class="flex items-center justify-between pb-2 border-b border-slate-200">
                             <h3 class="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center space-x-1.5">
                                 <i class="fa-solid fa-microchip text-sky-600"></i>
-                                <span>Machine Hardware &amp; Warranty {{ auth()->user()->isEngineer() ? '(Verified)' : '(Editable)' }}</span>
+                                <span>Machine Hardware &amp; Warranty (Editable)</span>
                             </h3>
                             <span class="text-[10px] bg-sky-100 text-sky-800 px-2 py-0.5 rounded font-bold">Step 1: Verify Hardware</span>
                         </div>
@@ -939,12 +938,13 @@
                         </div>
                     </div>
 
-                    <!-- Card 2: Branch Address & Bank Contacts (Editable) -->
+                    <fieldset @disabled(auth()->user()->isEngineer()) class="space-y-4">
+                    <!-- Card 2: Branch Address & Bank Contacts (Locked for Engineers, Editable for Operators) -->
                     <div class="bg-slate-50/60 p-4 rounded-xl border border-slate-200 space-y-3">
                         <div class="flex items-center justify-between pb-2 border-b border-slate-200">
                             <h3 class="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center space-x-1.5">
                                 <i class="fa-solid fa-location-dot text-rose-500"></i>
-                                <span>Branch Physical Address &amp; Contacts (Editable)</span>
+                                <span>Branch Physical Address &amp; Contacts {{ auth()->user()->isEngineer() ? '(Locked)' : '(Editable)' }}</span>
                             </h3>
                             <span class="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded font-bold">Step 2: Verify Address</span>
                         </div>
@@ -1016,15 +1016,22 @@
                             <span class="font-bold text-slate-800"><i class="fa-solid fa-check-double text-emerald-600 mr-1"></i> Human Finalization:</span>
                             Clicking Save verifies all extracted details.
                         </div>
-                        <button type="submit" class="w-full sm:w-auto px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl text-xs shadow hover:shadow-md transition flex items-center justify-center space-x-2">
+                        <button type="submit" class="w-full sm:w-auto px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl text-xs shadow hover:shadow-md transition flex items-center justify-center space-x-2 cursor-pointer">
                             <i class="fa-solid fa-user-check text-sm"></i>
                             <span>Save &amp; Finalize Ticket Details</span>
                         </button>
                     </div>
                     @else
-                    <div class="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-900 flex items-center space-x-2">
-                        <i class="fa-solid fa-wrench text-amber-600"></i>
-                        <span><strong>Field Engineer Mode:</strong> Hardware &amp; branch details are verified by Operations Admins. Use the resolution and workshop actions below.</span>
+                    <!-- ENGINEER SAVE ACTION BAR -->
+                    <div class="p-3.5 bg-sky-50 rounded-xl border border-sky-200 flex flex-col sm:flex-row items-center justify-between gap-3">
+                        <div class="text-xs text-sky-800">
+                            <span class="font-bold"><i class="fa-solid fa-microchip text-sky-600 mr-1"></i> Field Engineer:</span>
+                            You can edit or add Machine Type, Model, Serial Number / TID, and Warranty Status. Branch location &amp; contacts are locked.
+                        </div>
+                        <button type="submit" class="w-full sm:w-auto px-6 py-2.5 bg-sky-600 hover:bg-sky-700 text-white font-extrabold rounded-xl text-xs shadow hover:shadow-md transition flex items-center justify-center space-x-2 cursor-pointer">
+                            <i class="fa-solid fa-floppy-disk text-sm"></i>
+                            <span>Save Machine Details</span>
+                        </button>
                     </div>
                     @endif
                 </form>

@@ -88,6 +88,18 @@ class TicketController extends Controller
             });
         }
 
+        if ($request->filled('engineer_id')) {
+            if ($request->engineer_id === 'unassigned') {
+                $query->whereNull('assigned_engineer_id');
+            } else {
+                $engineerId = (int) $request->engineer_id;
+                $query->where(function ($q) use ($engineerId) {
+                    $q->forEngineer($engineerId)
+                      ->orWhere('original_field_engineer_id', $engineerId);
+                });
+            }
+        }
+
         if (Auth::user()->isEngineer()) {
             $query->where(function ($q) {
                 $q->forEngineer(Auth::id())
@@ -109,15 +121,13 @@ class TicketController extends Controller
             'escalated' => Ticket::where('status', 'escalated')->count(),
         ];
 
-        return view('tickets.open', compact('tickets', 'stats'));
+        $engineers = User::where('role', 'engineer')->orderBy('name')->get();
+
+        return view('tickets.open', compact('tickets', 'stats', 'engineers'));
     }
 
     public function index(Request $request)
     {
-        if (Auth::user()->isOfficeStaff()) {
-            return redirect()->route('tickets.open');
-        }
-
         $query = Ticket::with(['engineer', 'assignedBy', 'activeTicketEngineers'])->latest();
 
         // Filters
@@ -1321,7 +1331,28 @@ class TicketController extends Controller
     public function finalizeDetails(Request $request, Ticket $ticket)
     {
         if (Auth::user()->isEngineer()) {
-            abort(403, 'Ticket details can only be finalized by Operations Administrators.');
+            $validated = $request->validate([
+                'machine_type'      => 'nullable|string|max:100',
+                'machine_model'     => 'nullable|string|max:100',
+                'machine_serial_no' => 'nullable|string|max:100',
+                'warranty_status'   => 'required|in:in_warranty,out_of_warranty,unknown',
+            ]);
+
+            $ticket->update([
+                'machine_type'      => $validated['machine_type'] ?? null,
+                'machine_model'     => $validated['machine_model'] ?? null,
+                'machine_serial_no' => $validated['machine_serial_no'] ?? null,
+                'warranty_status'   => $validated['warranty_status'],
+            ]);
+
+            TicketLog::create([
+                'ticket_id' => $ticket->id,
+                'user_id'   => Auth::id(),
+                'action'    => 'hardware_updated',
+                'notes'     => 'Machine hardware & warranty details updated by engineer ' . Auth::user()->name . '. Machine Type: ' . ($ticket->machine_type ?? 'N/A') . ', Model: ' . ($ticket->machine_model ?? 'N/A') . ', S/N: ' . ($ticket->machine_serial_no ?? 'N/A') . ', Warranty: ' . $ticket->warranty_status,
+            ]);
+
+            return back()->with('success', 'Machine hardware and warranty details updated successfully.');
         }
 
         $validated = $request->validate([

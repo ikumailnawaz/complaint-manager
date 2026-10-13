@@ -125,7 +125,7 @@
 
         <!-- Right 1 Col: Add Location Card -->
         <div class="space-y-4">
-            @if(auth()->user()->isAdmin())
+            @if(auth()->user()->isAdmin() || auth()->user()->isOfficeStaff())
             <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
                 <h2 class="text-sm font-bold text-slate-900 mb-1 flex items-center space-x-1.5">
                     <i class="fa-solid fa-plus-circle text-emerald-600"></i>

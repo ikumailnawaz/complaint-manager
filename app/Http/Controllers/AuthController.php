@@ -55,6 +55,7 @@ class AuthController extends Controller
             'admin', 'ronald' => User::whereRaw('LOWER(name) = ?', ['ronald'])->first(),
             'superior', 'nazir' => User::whereRaw('LOWER(name) = ?', ['nazir'])->first(),
             'office_staff', 'staff', 'adnan' => User::whereRaw('LOWER(name) = ?', ['adnan'])->first(),
+            'ikram' => User::whereRaw('LOWER(name) = ?', ['ikram'])->first(),
             'engineer', 'farhankhalid' => User::whereRaw('LOWER(name) = ?', ['farhankhalid'])->first(),
             'engineer2', 'usman' => User::whereRaw('LOWER(name) = ?', ['usman'])->first(),
             default => User::where('role', $role)->first() ?: User::first(),
