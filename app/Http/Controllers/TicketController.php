@@ -859,6 +859,15 @@ class TicketController extends Controller
             return back()->with('error', "Machine is in transit to central workshop. It cannot be marked complete until bench repair is completed.");
         }
 
+        $serial = trim((string)($ticket->machine_serial_no ?? ''));
+        if ($serial === '' || strtoupper($serial) === 'N/A' || $serial === '—' || $serial === '-') {
+            $msg = 'Machine Serial Number / TID is mandatory before marking a complaint as resolved. Please update machine specifications first.';
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json(['success' => false, 'message' => $msg], 422);
+            }
+            return back()->with('error', $msg);
+        }
+
         $request->validate([
             'resolution_summary' => 'required|string',
             'supporting_document' => 'nullable|file|mimes:jpeg,png,jpg,gif,webp,pdf|max:10240',

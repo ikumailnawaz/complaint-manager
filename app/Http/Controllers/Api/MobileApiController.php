@@ -443,6 +443,14 @@ class MobileApiController extends Controller
             return response()->json(['success' => false, 'message' => "Ticket #{$ticket->ticket_no} is already {$ticket->status}."], 422);
         }
 
+        $serial = trim((string)($ticket->machine_serial_no ?? ''));
+        if ($serial === '' || strtoupper($serial) === 'N/A' || $serial === '—' || $serial === '-') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Machine Serial Number / TID is mandatory before marking a complaint as resolved. Please update machine specifications first.',
+            ], 422);
+        }
+
         $validator = Validator::make($request->all(), [
             'resolution_summary'  => 'required|string|max:2000',
             'supporting_document' => 'nullable|file|mimes:pdf,jpg,jpeg,png,webp|max:10240',
@@ -1703,6 +1711,14 @@ class MobileApiController extends Controller
 
         if (!$user->isSuperior() && !$user->isWorkshopIncharge() && $user->id !== $ticket->assigned_engineer_id && $user->id !== $ticket->workshop_engineer_id) {
             return response()->json(['success' => false, 'message' => 'Unauthorized: Only assigned bench tech or incharge can complete repair.'], 403);
+        }
+
+        $serial = trim((string)($ticket->machine_serial_no ?? ''));
+        if ($serial === '' || strtoupper($serial) === 'N/A' || $serial === '—' || $serial === '-') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Machine Serial Number / TID is mandatory before completing bench repair. Please update machine specifications first.',
+            ], 422);
         }
 
         $validator = Validator::make($request->all(), [

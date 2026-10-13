@@ -237,6 +237,11 @@ class WorkshopController extends Controller
             abort(403, 'Only the assigned workshop technician or incharge can mark bench repair complete.');
         }
 
+        $serial = trim((string)($ticket->machine_serial_no ?? ''));
+        if ($serial === '' || strtoupper($serial) === 'N/A' || $serial === '—' || $serial === '-') {
+            return back()->with('error', 'Machine Serial Number / TID is mandatory before marking bench repair complete. Please update machine specifications first.');
+        }
+
         $request->validate([
             'workshop_repair_summary' => 'required|string|max:1000',
         ], [
