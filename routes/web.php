@@ -225,6 +225,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/api/search-parts', [PartsController::class, 'searchParts'])->name('api.search-parts');
         Route::get('/api/search-models', [PartsController::class, 'searchModels'])->name('api.search-models');
         Route::get('/api/model-parts/{model}', [PartsController::class, 'modelParts'])->name('api.model-parts');
+        Route::get('/api/generate-part-sku', [PartsController::class, 'generatePartSku'])->name('api.generate-part-sku');
     });
 
     // ─── PREVENTIVE MAINTENANCE MODULE ────────────────────────────────────────

@@ -39,4 +39,40 @@ class Part extends Model {
     public function isLowStock(): bool {
         return $this->totalStock() <= $this->reorder_level && $this->reorder_level > 0;
     }
+
+    /**
+     * Auto-generate a unique Part Number / SKU based on selected machine model or standard prefix.
+     */
+    public static function generatePartNumber($modelIds = null): string {
+        $prefix = 'PRT';
+        if (!empty($modelIds)) {
+            $firstId = is_array($modelIds) ? reset($modelIds) : $modelIds;
+            $model = MachineModel::find($firstId);
+            if ($model && !empty($model->name)) {
+                $clean = strtoupper(preg_replace('/[^A-Za-z0-9]/', '', $model->name));
+                if (!empty($clean)) {
+                    $prefix = substr($clean, 0, 8);
+                }
+            }
+        }
+
+        $existing = static::where('part_number', 'like', "{$prefix}-%")->pluck('part_number');
+        $maxSeq = 0;
+        foreach ($existing as $pn) {
+            if (preg_match('/' . preg_quote($prefix, '/') . '-(\d+)/i', $pn, $m)) {
+                $val = (int) $m[1];
+                if ($val > $maxSeq) {
+                    $maxSeq = $val;
+                }
+            }
+        }
+
+        $seq = $maxSeq + 1;
+        do {
+            $candidate = $prefix . '-' . str_pad($seq, 4, '0', STR_PAD_LEFT);
+            $seq++;
+        } while (static::where('part_number', $candidate)->exists());
+
+        return $candidate;
+    }
 }

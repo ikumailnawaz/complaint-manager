@@ -38,8 +38,16 @@ class PartsController extends Controller
     public function partsStore(Request $request)
     {
         abort_unless(auth()->user()->isAdmin() || auth()->user()->isOfficeStaff(), 403);
+
+        // Auto-generate Part Number / SKU if left empty
+        $partNumber = trim((string) $request->input('part_number'));
+        if ($partNumber === '') {
+            $partNumber = Part::generatePartNumber($request->input('model_ids'));
+            $request->merge(['part_number' => $partNumber]);
+        }
+
         $data = $request->validate([
-            'part_number' => 'required|string|max:100|unique:parts',
+            'part_number' => 'required|string|max:100|unique:parts,part_number',
             'name'        => 'required|string|max:255',
             'description' => 'nullable|string',
             'unit'        => 'required|string|max:30',
@@ -52,7 +60,7 @@ class PartsController extends Controller
         if (!empty($data['model_ids'])) {
             $part->machineModels()->sync($data['model_ids']);
         }
-        return redirect()->route('parts.master.parts')->with('success', 'Part "' . $part->name . '" created successfully.');
+        return redirect()->route('parts.master.parts')->with('success', 'Part "' . $part->name . '" (SKU: ' . $part->part_number . ') created successfully.');
     }
 
     public function partsEdit(Part $part)
@@ -66,6 +74,14 @@ class PartsController extends Controller
     public function partsUpdate(Request $request, Part $part)
     {
         abort_unless(auth()->user()->isAdmin() || auth()->user()->isOfficeStaff(), 403);
+
+        // Auto-generate or retain Part Number / SKU if left empty
+        $partNumber = trim((string) $request->input('part_number'));
+        if ($partNumber === '') {
+            $partNumber = $part->part_number ?: Part::generatePartNumber($request->input('model_ids'));
+            $request->merge(['part_number' => $partNumber]);
+        }
+
         $data = $request->validate([
             'part_number'   => 'required|string|max:100|unique:parts,part_number,' . $part->id,
             'name'          => 'required|string|max:255',
@@ -222,5 +238,19 @@ class PartsController extends Controller
     {
         $parts = $model->parts()->where('is_active', true)->get(['parts.id', 'parts.part_number', 'parts.name', 'parts.unit', 'parts.unit_cost']);
         return response()->json($parts);
+    }
+
+    // ─── AJAX: auto-generate SKU for new part based on model ──────────────────
+    public function generatePartSku(Request $request)
+    {
+        $modelIds = $request->input('model_ids');
+        if (is_string($modelIds)) {
+            $modelIds = array_filter(explode(',', $modelIds));
+        } elseif (!is_array($modelIds) && !empty($request->input('model_id'))) {
+            $modelIds = [$request->input('model_id')];
+        }
+
+        $sku = Part::generatePartNumber($modelIds);
+        return response()->json(['sku' => $sku]);
     }
 }
