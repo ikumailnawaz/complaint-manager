@@ -530,13 +530,12 @@ class TrackingWebController extends Controller
         }
 
         $att->update([
-            'status'             => $request->status,
-            'first_in_at'        => $firstIn ?? $att->first_in_at,
-            'last_out_at'        => $lastOut ?? $att->last_out_at,
-            'is_manual_override' => true,
-            'override_reason'    => $request->override_reason,
-            'overridden_by_id'   => auth()->id(),
-            'overridden_at'      => now(),
+            'manual_status'    => $request->status,
+            'manual_first_in'  => $firstIn ?? $att->manual_first_in,
+            'manual_last_out'  => $lastOut ?? $att->manual_last_out,
+            'manual_note'      => $request->override_reason,
+            'overridden_by_id' => auth()->id(),
+            'overridden_at'    => now(),
         ]);
 
         return back()->with('success', "Attendance updated successfully for " . ($att->engineer?->name ?? 'engineer') . ".");

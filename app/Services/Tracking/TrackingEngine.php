@@ -643,6 +643,13 @@ class TrackingEngine
             $att->still_inside = $stillInside;
             $att->office_visits = max(1, $att->office_visits);
 
+            if (!$stillInside && $lastOut->gt($firstIn)) {
+                $att->office_minutes = (int)$firstIn->diffInMinutes($lastOut);
+            } elseif ($stillInside) {
+                $latestPointTime = Carbon::parse($lastTotalPt->recorded_at);
+                $att->office_minutes = (int)max(1, $firstIn->diffInMinutes($latestPointTime));
+            }
+
             // Determine status
             if ($firstIn->lte($lateCutoff)) {
                 $att->status = 'present';

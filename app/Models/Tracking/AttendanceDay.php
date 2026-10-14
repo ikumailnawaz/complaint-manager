@@ -24,6 +24,16 @@ class AttendanceDay extends Model
         'still_inside' => 'boolean',
     ];
 
+    protected $appends = [
+        'first_in_at',
+        'last_out_at',
+        'is_late',
+        'is_manual_override',
+        'override_reason',
+        'entries_count',
+        'field_minutes',
+    ];
+
     public function setDateAttribute($value)
     {
         $this->attributes['date'] = Carbon::parse($value)->toDateString();
@@ -95,8 +105,43 @@ class AttendanceDay extends Model
         return $this->office_visits ?: 1;
     }
 
+    /**
+     * Accurately compute office minutes.
+     * If still inside today, dynamic time from arrival up to now().
+     */
+    public function getOfficeMinutesAttribute($value): int
+    {
+        $val = (int)($value ?? 0);
+        $firstIn = $this->effective_first_in;
+        $lastOut = $this->effective_last_out;
+
+        if ($this->still_inside && $firstIn) {
+            $inTime = Carbon::parse($firstIn);
+            if (Carbon::parse($this->date)->isToday()) {
+                return (int)max($val, $inTime->diffInMinutes(now()));
+            }
+        } elseif ($firstIn && $lastOut) {
+            $diff = (int)Carbon::parse($firstIn)->diffInMinutes(Carbon::parse($lastOut));
+            return max($val, $diff);
+        }
+
+        return $val;
+    }
+
+    /**
+     * Actual transit/drive minutes tracked by GPS.
+     * Do NOT hardcode fictitious workday hours.
+     */
     public function getFieldMinutesAttribute(): int
     {
-        return max(0, 480 - ($this->office_minutes ?: 0));
+        $driveSec = TrackingDailySummary::where('user_id', $this->user_id)
+            ->where('date', $this->date)
+            ->value('drive_sec');
+
+        if ($driveSec && $driveSec > 0) {
+            return (int)round($driveSec / 60);
+        }
+
+        return 0;
     }
 }
