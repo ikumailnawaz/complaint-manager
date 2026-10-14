@@ -56,7 +56,7 @@ class TrackingEngine
                 continue;
             }
 
-            $recAt = Carbon::parse($p['recorded_at']);
+            $recAt = Carbon::parse($p['recorded_at'])->setTimezone(config('app.timezone', 'Asia/Karachi'));
             $dateStr = $recAt->toDateString();
             $affectedDates[$dateStr] = true;
 
@@ -103,7 +103,7 @@ class TrackingEngine
                 continue;
             }
 
-            $recAt = Carbon::parse($ev['recorded_at']);
+            $recAt = Carbon::parse($ev['recorded_at'])->setTimezone(config('app.timezone', 'Asia/Karachi'));
             $affectedDates[$recAt->toDateString()] = true;
 
             try {
