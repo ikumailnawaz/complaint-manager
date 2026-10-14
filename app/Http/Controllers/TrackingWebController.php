@@ -150,11 +150,17 @@ class TrackingWebController extends Controller
                 }
             }
 
+            $diffMins = $s->recorded_at ? Carbon::parse($s->recorded_at)->diffInMinutes($now) : null;
+            $isStale = ($diffMins === null || $diffMins >= 5);
+
             return [
                 'engineer_id'      => $s->user_id,
                 'name'             => $s->user?->name ?? 'Engineer',
                 'lat'              => (float)$s->lat,
                 'lng'              => (float)$s->lng,
+                'accuracy'         => $s->accuracy ? round((float)$s->accuracy, 1) : null,
+                'is_stale'         => $isStale,
+                'stale_minutes'    => $diffMins,
                 'speed_kmh'        => $s->speed ? round($s->speed * 3.6, 1) : 0,
                 'bearing'          => (float)($s->bearing ?? 0),
                 'battery'          => $s->battery,

@@ -126,6 +126,7 @@
 <script>
 let map;
 let markers = {};
+let accuracyCircles = {};
 let geofenceCircles = [];
 let bankMarkers = [];
 let engineersData = [];
@@ -273,6 +274,15 @@ function renderFleetList(engineers) {
 
         const playbackUrl = "{{ url('/tracking/engineer') }}/" + e.engineer_id;
 
+        const accText = e.accuracy !== null ? '±' + e.accuracy + 'm' : '—';
+        const accColor = e.accuracy && e.accuracy <= 20 
+            ? 'text-emerald-600' 
+            : (e.accuracy && e.accuracy <= 50 ? 'text-amber-600' : 'text-slate-400');
+
+        const staleBadge = e.is_stale 
+            ? `<span class="text-[9px] px-1.5 py-0.5 rounded font-bold bg-amber-50 text-amber-700 border border-amber-200" title="Stale reading"><i class="fa-solid fa-clock-rotate-left mr-0.5"></i> Stale (${e.stale_minutes ?? '>15'}m)</span>` 
+            : '';
+
         html += `
             <div class="p-3 hover:bg-slate-50 transition cursor-pointer flex flex-col space-y-2 rounded-xl m-1" onclick="focusEngineer(${e.engineer_id}, ${e.lat}, ${e.lng})">
                 <div class="flex items-center justify-between">
@@ -285,14 +295,21 @@ function renderFleetList(engineers) {
                             <div class="text-[10px] text-slate-400">${e.current_geofence ? 'At ' + e.current_geofence : e.last_updated}</div>
                         </div>
                     </div>
-                    <span class="text-[10px] px-2 py-0.5 rounded-full font-bold ${bgBadge}">
-                        ${e.status_text}
-                    </span>
+                    <div class="flex items-center space-x-1">
+                        ${staleBadge}
+                        <span class="text-[10px] px-2 py-0.5 rounded-full font-bold ${bgBadge}">
+                            ${e.status_text}
+                        </span>
+                    </div>
                 </div>
                 <div class="flex items-center justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-100">
                     <span class="flex items-center space-x-1">
                         <i class="fa-solid fa-gauge text-slate-400"></i>
                         <span>${e.speed_kmh} km/h</span>
+                    </span>
+                    <span class="flex items-center space-x-1 ${accColor}" title="GPS Horizontal Accuracy">
+                        <i class="fa-solid fa-bullseye text-[10px]"></i>
+                        <span>${accText}</span>
                     </span>
                     <span class="flex items-center space-x-1">
                         <i class="fa-solid fa-battery-three-quarters text-slate-400"></i>
@@ -300,7 +317,7 @@ function renderFleetList(engineers) {
                     </span>
                     <a href="${playbackUrl}" onclick="event.stopPropagation()" class="text-indigo-600 hover:text-indigo-800 font-bold flex items-center space-x-1">
                         <i class="fa-solid fa-play text-[10px]"></i>
-                        <span>Simulate Trip</span>
+                        <span>Simulate</span>
                     </a>
                 </div>
             </div>
@@ -331,15 +348,31 @@ function updateMapMarkers(engineers) {
             popupAnchor: [0, -16]
         });
 
+        const accBadge = e.accuracy !== null
+            ? `<span class="font-bold ${e.accuracy <= 20 ? 'text-emerald-600' : (e.accuracy <= 50 ? 'text-amber-600' : 'text-rose-600')}">±${e.accuracy}m</span>`
+            : '<span class="text-slate-400">Unknown</span>';
+
+        const staleWarning = e.is_stale
+            ? `<div class="p-1.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-[10px] font-semibold flex items-center space-x-1.5">
+                   <i class="fa-solid fa-triangle-exclamation text-amber-600"></i>
+                   <span>Stale GPS Location (${e.stale_minutes ?? '>15'}m ago)</span>
+               </div>`
+            : '';
+
         const popupContent = `
             <div class="p-2 space-y-1.5 text-xs font-sans">
                 <div class="font-extrabold text-sm text-slate-900 flex items-center justify-between">
                     <span>${e.name}</span>
                     <span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">${e.battery !== null ? e.battery + '%' : ''}</span>
                 </div>
-                <div class="text-slate-600">Status: <b>${e.status_text}</b></div>
-                <div class="text-slate-600">Speed: <b>${e.speed_kmh} km/h</b></div>
-                <div class="text-slate-500 text-[11px]">Last Ping: ${e.recorded_at_time || e.last_updated}</div>
+                ${staleWarning}
+                <div class="text-slate-600 flex justify-between"><span>Status:</span> <b>${e.status_text}</b></div>
+                <div class="text-slate-600 flex justify-between"><span>Speed:</span> <b>${e.speed_kmh} km/h</b></div>
+                <div class="text-slate-600 flex justify-between"><span>Accuracy:</span> ${accBadge}</div>
+                <div class="text-slate-500 text-[11px] flex justify-between border-t border-slate-100 pt-1">
+                    <span>Last Ping:</span>
+                    <span>${e.recorded_at_time || e.last_updated}</span>
+                </div>
                 <div class="pt-2">
                     <a href="{{ url('/tracking/engineer') }}/${e.engineer_id}" class="w-full block text-center py-1.5 px-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg text-xs shadow-xs transition">
                         <i class="fa-solid fa-play mr-1"></i> Play Trip Animation
@@ -357,13 +390,39 @@ function updateMapMarkers(engineers) {
                 .addTo(map)
                 .bindPopup(popupContent);
         }
+
+        // Accuracy circle
+        if (e.accuracy && e.accuracy > 0 && e.accuracy <= 250) {
+            const circleColor = e.is_stale ? '#f59e0b' : '#0ea5e9';
+            if (accuracyCircles[e.engineer_id]) {
+                accuracyCircles[e.engineer_id].setLatLng([e.lat, e.lng]);
+                accuracyCircles[e.engineer_id].setRadius(e.accuracy);
+                accuracyCircles[e.engineer_id].setStyle({ color: circleColor, fillColor: circleColor });
+            } else {
+                accuracyCircles[e.engineer_id] = L.circle([e.lat, e.lng], {
+                    radius: e.accuracy,
+                    color: circleColor,
+                    fillColor: circleColor,
+                    fillOpacity: 0.10,
+                    weight: 1.2,
+                    dashArray: '3, 4'
+                }).addTo(map);
+            }
+        } else if (accuracyCircles[e.engineer_id]) {
+            map.removeLayer(accuracyCircles[e.engineer_id]);
+            delete accuracyCircles[e.engineer_id];
+        }
     });
 
-    // Remove old markers
+    // Remove old markers and accuracy circles
     for (const id in markers) {
         if (!seen[id]) {
             map.removeLayer(markers[id]);
             delete markers[id];
+            if (accuracyCircles[id]) {
+                map.removeLayer(accuracyCircles[id]);
+                delete accuracyCircles[id];
+            }
         }
     }
 }

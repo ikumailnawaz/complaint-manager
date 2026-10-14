@@ -218,6 +218,12 @@ class TrackingEngine
             if ($pt->is_mocked) {
                 $mockCount++;
             }
+            if ($pt->lat == 0 && $pt->lng == 0) {
+                continue; // drop invalid zero coordinates
+            }
+            if ($pt->lat < -90 || $pt->lat > 90 || $pt->lng < -180 || $pt->lng > 180) {
+                continue; // drop out-of-bounds coordinates
+            }
             if ($pt->accuracy !== null && $pt->accuracy > $maxAccuracyM) {
                 continue; // drop inaccurate jump
             }
