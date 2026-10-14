@@ -289,7 +289,8 @@ Route::middleware('auth')->group(function () {
     });
 
     // ─── FIELD ENGINEER LIVE FLEET & ATTENDANCE TRACKING (Secured with Lock) ───
-    Route::get('/tracking/lock', [TrackingWebController::class, 'showLock'])->name('tracking.lock.show');
+    Route::get('/tracking/lock', [TrackingWebController::class, 'showLock'])->name('tracking.lock');
+    Route::get('/tracking/lock-show', [TrackingWebController::class, 'showLock'])->name('tracking.lock.show');
     Route::post('/tracking/unlock', [TrackingWebController::class, 'unlock'])->name('tracking.unlock');
 
     Route::prefix('tracking')->name('tracking.')->middleware(['tracking.lock'])->group(function () {

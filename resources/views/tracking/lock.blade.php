@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'Unlock Tracking & Monitoring - Security Verification')
+@section('title', 'Root Level Access')
 
 @section('content')
 <div class="min-h-[75vh] flex items-center justify-center p-4">
@@ -8,12 +8,12 @@
         <!-- Header Banner -->
         <div class="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-6 text-center text-white relative">
             <div class="w-16 h-16 rounded-2xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center mx-auto mb-3 shadow-inner">
-                <i class="fa-solid fa-lock text-2xl text-indigo-400"></i>
+                <i class="fa-solid fa-shield-halved text-2xl text-indigo-400"></i>
             </div>
-            <h2 class="text-xl font-extrabold tracking-tight">Security Verification</h2>
-            <p class="text-xs text-indigo-200/80 mt-1">Field Engineer Live GPS &amp; Attendance Monitoring</p>
-            <div class="absolute top-3 right-3 text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/30 text-indigo-200 font-mono">
-                SECURE ACCESS
+            <h2 class="text-xl font-extrabold tracking-tight">Root Level Access</h2>
+            <p class="text-xs text-indigo-200/80 mt-1">Elevated System Security Authorization</p>
+            <div class="absolute top-3 right-3 text-[10px] px-2.5 py-0.5 rounded-full bg-indigo-500/30 text-indigo-200 font-mono tracking-wider">
+                ROOT ACCESS
             </div>
         </div>
 
@@ -32,7 +32,7 @@
 
                 <div>
                     <label class="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">
-                        Enter Security Password
+                        Root Access Password
                     </label>
                     <div class="relative">
                         <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400">
@@ -43,7 +43,7 @@
                                id="tracking_password_input" 
                                required 
                                autofocus
-                               placeholder="Enter admin password to unlock..."
+                               placeholder="Enter password (default: admin)..."
                                class="w-full pl-9 pr-10 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:bg-white transition font-mono">
                         <button type="button" 
                                 onclick="togglePasswordVisibility()" 
@@ -51,21 +51,25 @@
                             <i id="eye_icon" class="fa-solid fa-eye text-xs"></i>
                         </button>
                     </div>
+                    <p class="text-[11px] text-emerald-600 font-medium mt-1.5 flex items-center gap-1.5">
+                        <i class="fa-solid fa-circle-check"></i>
+                        <span>100% Free OpenStreetMap tracking • No API key or fee required</span>
+                    </p>
                 </div>
 
                 <div class="pt-2">
                     <button type="submit" 
                             class="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-bold text-sm rounded-xl shadow-md hover:shadow-lg transition flex items-center justify-center space-x-2">
                         <i class="fa-solid fa-unlock-keyhole"></i>
-                        <span>Verify &amp; Unlock Module</span>
+                        <span>Authenticate &amp; Unlock</span>
                     </button>
                 </div>
             </form>
 
             <div class="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
                 <span class="flex items-center space-x-1.5">
-                    <i class="fa-solid fa-shield-halved text-emerald-500"></i>
-                    <span>Auto-locks on exit</span>
+                    <i class="fa-solid fa-lock text-slate-400"></i>
+                    <span>Auto-locks upon leaving</span>
                 </span>
                 <a href="{{ route('dashboard') }}" class="text-indigo-600 hover:text-indigo-800 font-semibold hover:underline">
                     Back to Dashboard &rarr;

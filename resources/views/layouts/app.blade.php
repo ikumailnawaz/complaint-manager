@@ -452,23 +452,17 @@
                 </details>
                 @endif
 
-                <!-- 10. FIELD ENGINEER FLEET & ATTENDANCE TRACKING (LOCKED MODULE) -->
+                <!-- 10. ROOT LEVEL ACCESS (CLICKABLE LOCK ICON ONLY) -->
                 @php
-                    $trackingActive = request()->routeIs('tracking.*');
+                    $trackingUnlocked = session('tracking_module_unlocked', false);
                 @endphp
-                <div class="space-y-0.5 pt-2 border-t border-slate-800">
+                <div class="pt-2 border-t border-slate-800">
                     <a href="{{ route('tracking.live') }}" 
-                       class="flex items-center justify-between px-3 py-2 rounded-xl font-semibold transition {{ $trackingActive ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md shadow-emerald-950/50' : 'text-slate-200 hover:bg-slate-800 hover:text-white' }}">
-                        <span class="flex items-center space-x-2.5">
-                            <i class="fa-solid fa-location-crosshairs w-4 text-center {{ $trackingActive ? 'text-white' : 'text-emerald-400' }}"></i>
-                            <span class="text-white">Fleet &amp; Attendance</span>
-                        </span>
-                        <span class="px-1.5 py-0.5 bg-slate-900/80 border border-slate-700 text-amber-400 text-[10px] rounded flex items-center gap-1 font-mono">
-                            <i class="fa-solid fa-lock text-[9px]"></i>
-                            <span>SECURE</span>
-                        </span>
+                       title="{{ $trackingUnlocked ? 'Root Level Access (Unlocked)' : 'Root Level Access (Password Required)' }}"
+                       class="flex items-center justify-center p-2.5 rounded-xl font-semibold transition {{ $trackingUnlocked ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md shadow-emerald-950/50' : 'text-amber-400 hover:text-amber-300 hover:bg-slate-800 bg-slate-900/60 border border-slate-800/80 shadow-inner' }}">
+                        <i class="fa-solid {{ $trackingUnlocked ? 'fa-unlock-keyhole' : 'fa-lock' }} text-sm"></i>
                     </a>
-                    @if($trackingActive)
+                    @if($trackingUnlocked)
                     <div class="pl-7 pr-2 py-1 space-y-1 border-l-2 border-emerald-500 ml-5 mt-1">
                         <a href="{{ route('tracking.live') }}" class="flex items-center px-2.5 py-1.5 rounded-lg text-xs {{ request()->routeIs('tracking.live') ? 'bg-slate-800 text-emerald-400 font-bold border-l-2 border-emerald-400 pl-2' : 'text-slate-300 hover:text-white' }} transition">
                             <i class="fa-solid fa-map-location-dot mr-1.5 text-[10px]"></i> Live Fleet Map

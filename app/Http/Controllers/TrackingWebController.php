@@ -65,7 +65,7 @@ class TrackingWebController extends Controller
      */
     public function live(Request $request)
     {
-        $engineers = User::where('role', 'engineer')
+        $engineers = User::whereIn('role', ['engineer', 'workshop_technician'])
             ->orderBy('name')
             ->get();
 
