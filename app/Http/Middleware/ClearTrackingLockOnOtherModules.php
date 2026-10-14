@@ -15,8 +15,17 @@ class ClearTrackingLockOnOtherModules
     public function handle(Request $request, Closure $next): Response
     {
         if (session('tracking_module_unlocked')) {
-            // If the requested URI is outside the tracking module, relock immediately!
-            if (!$request->is('tracking*') && !$request->is('api/v1/tracking*')) {
+            // Ignore background AJAX, JSON API, notifications polling, and asset requests
+            if ($request->ajax() 
+                || $request->wantsJson() 
+                || $request->header('X-Requested-With') === 'XMLHttpRequest'
+                || $request->is('notifications*', 'storage*', 'assets*', 'build*', 'favicon.ico')
+            ) {
+                return $next($request);
+            }
+
+            // Only clear lock when performing full-page GET navigation outside the tracking module
+            if ($request->isMethod('GET') && !$request->is('tracking*') && !$request->is('api/v1/tracking*')) {
                 session()->forget('tracking_module_unlocked');
             }
         }

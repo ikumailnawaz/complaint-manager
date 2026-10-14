@@ -51,10 +51,6 @@
                             <i id="eye_icon" class="fa-solid fa-eye text-xs"></i>
                         </button>
                     </div>
-                    <p class="text-[11px] text-emerald-600 font-medium mt-1.5 flex items-center gap-1.5">
-                        <i class="fa-solid fa-circle-check"></i>
-                        <span>100% Free OpenStreetMap tracking • No API key or fee required</span>
-                    </p>
                 </div>
 
                 <div class="pt-2">
