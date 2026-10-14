@@ -458,29 +458,10 @@
                 @endphp
                 <div class="pt-2 border-t border-slate-800">
                     <a href="{{ route('tracking.live') }}" 
-                       title="{{ $trackingUnlocked ? 'Root Level Access (Unlocked)' : 'Root Level Access (Password Required)' }}"
+                       title="{{ $trackingUnlocked ? 'Root Level Access (Unlocked - Click to enter)' : 'Root Level Access (Password Required)' }}"
                        class="flex items-center justify-center p-2.5 rounded-xl font-semibold transition {{ $trackingUnlocked ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md shadow-emerald-950/50' : 'text-amber-400 hover:text-amber-300 hover:bg-slate-800 bg-slate-900/60 border border-slate-800/80 shadow-inner' }}">
                         <i class="fa-solid {{ $trackingUnlocked ? 'fa-unlock-keyhole' : 'fa-lock' }} text-sm"></i>
                     </a>
-                    @if($trackingUnlocked)
-                    <div class="pl-7 pr-2 py-1 space-y-1 border-l-2 border-emerald-500 ml-5 mt-1">
-                        <a href="{{ route('tracking.live') }}" class="flex items-center px-2.5 py-1.5 rounded-lg text-xs {{ request()->routeIs('tracking.live') ? 'bg-slate-800 text-emerald-400 font-bold border-l-2 border-emerald-400 pl-2' : 'text-slate-300 hover:text-white' }} transition">
-                            <i class="fa-solid fa-map-location-dot mr-1.5 text-[10px]"></i> Live Fleet Map
-                        </a>
-                        <a href="{{ route('tracking.playback') }}" class="flex items-center px-2.5 py-1.5 rounded-lg text-xs {{ request()->routeIs('tracking.playback') ? 'bg-slate-800 text-teal-400 font-bold border-l-2 border-teal-400 pl-2' : 'text-slate-300 hover:text-white' }} transition">
-                            <i class="fa-solid fa-play mr-1.5 text-[10px]"></i> Route Simulation
-                        </a>
-                        <a href="{{ route('tracking.attendance') }}" class="flex items-center px-2.5 py-1.5 rounded-lg text-xs {{ request()->routeIs('tracking.attendance') ? 'bg-slate-800 text-amber-400 font-bold border-l-2 border-amber-400 pl-2' : 'text-slate-300 hover:text-white' }} transition">
-                            <i class="fa-solid fa-clipboard-user mr-1.5 text-[10px]"></i> Auto Attendance
-                        </a>
-                        <a href="{{ route('tracking.reports') }}" class="flex items-center px-2.5 py-1.5 rounded-lg text-xs {{ request()->routeIs('tracking.reports') ? 'bg-slate-800 text-sky-400 font-bold border-l-2 border-sky-400 pl-2' : 'text-slate-300 hover:text-white' }} transition">
-                            <i class="fa-solid fa-chart-column mr-1.5 text-[10px]"></i> Travel &amp; Stop Reports
-                        </a>
-                        <a href="{{ route('tracking.settings') }}" class="flex items-center px-2.5 py-1.5 rounded-lg text-xs {{ request()->routeIs('tracking.settings') ? 'bg-slate-800 text-violet-400 font-bold border-l-2 border-violet-400 pl-2' : 'text-slate-300 hover:text-white' }} transition">
-                            <i class="fa-solid fa-sliders mr-1.5 text-[10px]"></i> Geofences &amp; Settings
-                        </a>
-                    </div>
-                    @endif
                 </div>
             </nav>
         </div>

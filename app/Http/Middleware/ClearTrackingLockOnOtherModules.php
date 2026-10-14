@@ -15,9 +15,8 @@ class ClearTrackingLockOnOtherModules
     public function handle(Request $request, Closure $next): Response
     {
         if (session('tracking_module_unlocked')) {
-            $routeName = $request->route() ? $request->route()->getName() : '';
-            // If the route does not start with 'tracking.', relock it!
-            if ($routeName && !str_starts_with($routeName, 'tracking.')) {
+            // If the requested URI is outside the tracking module, relock immediately!
+            if (!$request->is('tracking*') && !$request->is('api/v1/tracking*')) {
                 session()->forget('tracking_module_unlocked');
             }
         }

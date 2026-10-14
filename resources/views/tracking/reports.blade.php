@@ -3,7 +3,9 @@
 @section('header_title', 'Engineer Travel & Stoppage Reports')
 
 @section('content')
-<div class="space-y-6 max-w-7xl mx-auto">
+<div class="space-y-4 max-w-7xl mx-auto">
+    @include('tracking.partials.tabs')
+
     <!-- Top Filter Bar -->
     <div class="bg-white rounded-2xl p-5 shadow-xs border border-slate-200">
         <form method="GET" action="{{ route('tracking.reports') }}" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 items-end">

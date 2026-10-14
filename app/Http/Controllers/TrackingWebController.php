@@ -57,7 +57,16 @@ class TrackingWebController extends Controller
         session(['tracking_module_unlocked' => true]);
 
         $redirect = $request->input('redirect') ?: route('tracking.live');
-        return redirect($redirect)->with('success', 'Tracking & Monitoring module unlocked.');
+        return redirect($redirect)->with('success', 'Root Level Access unlocked.');
+    }
+
+    /**
+     * Explicitly lock the module now.
+     */
+    public function lockNow(Request $request)
+    {
+        session()->forget('tracking_module_unlocked');
+        return redirect()->route('tracking.lock')->with('success', 'Root Level Access locked.');
     }
 
     /**

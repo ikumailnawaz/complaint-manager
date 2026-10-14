@@ -292,6 +292,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/tracking/lock', [TrackingWebController::class, 'showLock'])->name('tracking.lock');
     Route::get('/tracking/lock-show', [TrackingWebController::class, 'showLock'])->name('tracking.lock.show');
     Route::post('/tracking/unlock', [TrackingWebController::class, 'unlock'])->name('tracking.unlock');
+    Route::match(['get', 'post'], '/tracking/lock-now', [TrackingWebController::class, 'lockNow'])->name('tracking.lock-now');
 
     Route::prefix('tracking')->name('tracking.')->middleware(['tracking.lock'])->group(function () {
         Route::get('/', function() { return redirect()->route('tracking.live'); });

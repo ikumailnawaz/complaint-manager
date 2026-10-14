@@ -3,7 +3,8 @@
 @section('header_title', 'Tracking & Geofence Settings')
 
 @section('content')
-<div class="space-y-6 max-w-7xl mx-auto">
+<div class="space-y-4 max-w-7xl mx-auto">
+    @include('tracking.partials.tabs')
 
     @if(session('success'))
         <div class="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl p-4 text-xs flex items-center gap-2">
