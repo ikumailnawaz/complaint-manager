@@ -13,6 +13,20 @@
         </div>
     @endif
 
+    @if($errors->any())
+        <div class="bg-rose-50 border border-rose-200 text-rose-800 rounded-2xl p-4 text-xs flex items-start gap-2">
+            <i class="fa-solid fa-triangle-exclamation text-rose-600 text-sm mt-0.5"></i>
+            <div>
+                <span class="font-bold">Please correct the following errors:</span>
+                <ul class="list-disc list-inside mt-1 space-y-0.5">
+                    @foreach($errors->all() as $error)
+                        <li>{{ $error }}</li>
+                    @endforeach
+                </ul>
+            </div>
+        </div>
+    @endif
+
     <!-- System Configuration Form -->
     <form method="POST" action="{{ route('tracking.settings.save') }}" class="space-y-6">
         @csrf
@@ -24,7 +38,7 @@
             </h3>
             <div class="max-w-md">
                 <label class="block text-xs font-semibold text-slate-600 mb-1">Access PIN / Password</label>
-                <input type="text" name="module_password" value="{{ $settings['module_password'] ?? 'admin' }}" required class="w-full text-xs rounded-xl border-slate-300 font-mono">
+                <input type="text" name="lock_password" value="{{ $settings['lock_password'] ?? $settings['module_password'] ?? 'admin' }}" required class="w-full text-xs rounded-xl border-slate-300 font-mono">
                 <p class="text-[11px] text-slate-500 mt-1">Prompted whenever user clicks the locked Fleet &amp; Attendance Tracking sidebar menu. Re-locks immediately upon leaving the module.</p>
             </div>
         </div>
@@ -141,15 +155,15 @@
                 </div>
                 <div>
                     <label class="block text-[11px] font-semibold text-slate-600 mb-1">Radius (Meters) *</label>
-                    <input type="number" name="radius_meters" value="75" min="25" max="1000" required class="w-full text-xs rounded-xl border-slate-300">
+                    <input type="number" name="radius_m" value="75" min="20" max="1000" required class="w-full text-xs rounded-xl border-slate-300">
                 </div>
                 <div>
                     <label class="block text-[11px] font-semibold text-slate-600 mb-1">Latitude *</label>
-                    <input type="number" step="0.0000001" name="latitude" required placeholder="31.5397357" class="w-full text-xs rounded-xl border-slate-300">
+                    <input type="number" step="any" name="lat" required placeholder="31.5397357" class="w-full text-xs rounded-xl border-slate-300">
                 </div>
                 <div>
                     <label class="block text-[11px] font-semibold text-slate-600 mb-1">Longitude *</label>
-                    <input type="number" step="0.0000001" name="longitude" required placeholder="74.3306892" class="w-full text-xs rounded-xl border-slate-300">
+                    <input type="number" step="any" name="lng" required placeholder="74.3306892" class="w-full text-xs rounded-xl border-slate-300">
                 </div>
                 <div>
                     <label class="block text-[11px] font-semibold text-slate-600 mb-1">City</label>
@@ -157,7 +171,7 @@
                 </div>
                 <div class="sm:col-span-2 lg:col-span-3 flex items-center justify-between pt-2">
                     <label class="inline-flex items-center gap-2 text-xs font-semibold text-slate-700">
-                        <input type="checkbox" name="is_attendance" value="1" checked class="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500">
+                        <input type="checkbox" name="is_attendance_point" value="1" checked class="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500">
                         <span>Use for Automated Daily Attendance (Time In &amp; Time Out)</span>
                     </label>
                     <div class="flex gap-2">
@@ -174,7 +188,6 @@
                 <thead class="text-[11px] font-semibold text-slate-500 uppercase bg-slate-50 border-b border-slate-200">
                     <tr>
                         <th class="py-3 px-3">Geofence Name</th>
-                        <th class="py-3 px-3">Type</th>
                         <th class="py-3 px-3">Coordinates</th>
                         <th class="py-3 px-3">Radius</th>
                         <th class="py-3 px-3">Attendance</th>
@@ -186,24 +199,18 @@
                     <tr class="hover:bg-slate-50/60 transition">
                         <td class="py-3 px-3 font-semibold text-slate-900">
                             {{ $geo->name }}
-                            @if($geo->city)
-                                <span class="text-[10px] text-slate-400 font-normal block">{{ $geo->city }}</span>
-                            @endif
-                        </td>
-                        <td class="py-3 px-3 uppercase text-[10px] font-bold text-slate-600">
-                            {{ $geo->type }}
                         </td>
                         <td class="py-3 px-3 font-mono text-slate-600">
-                            {{ number_format($geo->latitude, 6) }}, {{ number_format($geo->longitude, 6) }}
+                            {{ number_format((float)$geo->lat, 6) }}, {{ number_format((float)$geo->lng, 6) }}
                         </td>
                         <td class="py-3 px-3 font-semibold text-slate-800">
-                            {{ $geo->radius_meters }}m (~{{ round($geo->radius_meters * 3.28084) }} ft)
+                            {{ $geo->radius_m }}m (~{{ round($geo->radius_m * 3.28084) }} ft)
                         </td>
                         <td class="py-3 px-3">
-                            @if($geo->is_attendance)
-                                <span class="px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded text-[10px] font-bold">Enabled</span>
+                            @if($geo->is_attendance_point)
+                                <span class="px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded text-[10px] font-bold">Attendance Hub</span>
                             @else
-                                <span class="text-slate-400 text-[10px]">Disabled</span>
+                                <span class="text-slate-400 text-[10px]">Normal Zone</span>
                             @endif
                         </td>
                         <td class="py-3 px-3">

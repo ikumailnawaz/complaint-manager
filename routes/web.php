@@ -307,6 +307,7 @@ Route::middleware('auth')->group(function () {
         Route::post('/attendance/override', [TrackingWebController::class, 'overrideAttendance'])->name('attendance.override');
         Route::get('/settings', [TrackingWebController::class, 'settings'])->name('settings');
         Route::post('/settings', [TrackingWebController::class, 'saveSettings'])->name('settings.save');
+        Route::get('/settings/geofences', function() { return redirect()->route('tracking.settings'); });
         Route::post('/settings/geofences', [TrackingWebController::class, 'saveGeofence'])->name('settings.geofence.save');
         Route::delete('/settings/geofences/{geofence}', [TrackingWebController::class, 'deleteGeofence'])->name('settings.geofence.delete');
         Route::post('/reprocess', [TrackingWebController::class, 'reprocess'])->name('reprocess');

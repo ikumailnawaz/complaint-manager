@@ -48,10 +48,10 @@ class TrackingWebController extends Controller
      */
     public function unlock(Request $request)
     {
-        $password = $request->input('password');
-        $expected = TrackingSetting::get('lock_password', 'admin');
+        $password = (string)$request->input('password');
+        $expected = (string)TrackingSetting::get('lock_password', 'admin');
 
-        if ($password !== $expected && $password !== 'admin') {
+        if ($password !== $expected) {
             return back()->with('error', 'Invalid admin password. Access denied.')->withInput();
         }
 
@@ -559,24 +559,40 @@ class TrackingWebController extends Controller
      */
     public function saveSettings(Request $request)
     {
-        $keys = [
-            'tracking_enabled', 'timezone', 'duty_start', 'duty_end', 'attendance_late_time',
-            'moving_interval_sec', 'moving_distance_m', 'stationary_interval_sec',
-            'max_accuracy_m', 'upload_interval_sec', 'stop_radius_m', 'stop_min_minutes',
-            'stop_exit_radius_m', 'lock_password',
+        $mapping = [
+            'lock_password'           => 'lock_password',
+            'module_password'         => 'lock_password',
+            'duty_start'              => 'duty_start',
+            'duty_start_time'         => 'duty_start',
+            'duty_end'                => 'duty_end',
+            'duty_end_time'           => 'duty_end',
+            'attendance_late_time'    => 'attendance_late_time',
+            'attendance_start_time'   => 'attendance_start_time',
+            'attendance_grace_minutes'=> 'attendance_grace_minutes',
+            'moving_interval_sec'     => 'moving_interval_sec',
+            'moving_distance_m'       => 'moving_distance_m',
+            'stationary_interval_sec' => 'stationary_interval_sec',
+            'max_accuracy_m'          => 'max_accuracy_m',
+            'upload_interval_sec'     => 'upload_interval_sec',
+            'stop_radius_m'           => 'stop_radius_m',
+            'stay_radius_meters'      => 'stop_radius_m',
+            'stop_min_minutes'        => 'stop_min_minutes',
+            'stay_min_minutes'        => 'stop_min_minutes',
+            'stop_exit_radius_m'      => 'stop_exit_radius_m',
+            'exit_radius_meters'      => 'stop_exit_radius_m',
         ];
 
-        foreach ($keys as $k) {
-            if ($request->has($k)) {
-                $val = $request->input($k);
-                if (in_array($k, ['moving_interval_sec', 'moving_distance_m', 'stationary_interval_sec', 'max_accuracy_m', 'upload_interval_sec', 'stop_radius_m', 'stop_min_minutes', 'stop_exit_radius_m'])) {
+        foreach ($mapping as $inputKey => $settingKey) {
+            if ($request->has($inputKey) && $request->input($inputKey) !== null && $request->input($inputKey) !== '') {
+                $val = $request->input($inputKey);
+                if (in_array($settingKey, ['moving_interval_sec', 'moving_distance_m', 'stationary_interval_sec', 'max_accuracy_m', 'upload_interval_sec', 'stop_radius_m', 'stop_min_minutes', 'stop_exit_radius_m', 'attendance_grace_minutes'])) {
                     $val = (int)$val;
                 }
-                TrackingSetting::set($k, $val);
+                TrackingSetting::set($settingKey, $val);
             }
         }
 
-        return back()->with('success', 'Telemetry & Stay-Point parameters updated successfully.');
+        return redirect()->route('tracking.settings')->with('success', 'Telemetry & Security settings saved successfully.');
     }
 
     /**
@@ -584,6 +600,16 @@ class TrackingWebController extends Controller
      */
     public function saveGeofence(Request $request)
     {
+        $lat = $request->input('lat') ?? $request->input('latitude');
+        $lng = $request->input('lng') ?? $request->input('longitude');
+        $radius = $request->input('radius_m') ?? $request->input('radius_meters');
+
+        $request->merge([
+            'lat'      => $lat,
+            'lng'      => $lng,
+            'radius_m' => $radius,
+        ]);
+
         $request->validate([
             'name'     => 'required|string|max:120',
             'lat'      => 'required|numeric',
@@ -599,12 +625,12 @@ class TrackingWebController extends Controller
                 'lat'                 => (float)$request->lat,
                 'lng'                 => (float)$request->lng,
                 'radius_m'            => (int)$request->radius_m,
-                'is_attendance_point' => $request->has('is_attendance_point'),
+                'is_attendance_point' => $request->has('is_attendance_point') || $request->has('is_attendance'),
                 'is_active'           => true,
             ]
         );
 
-        return back()->with('success', "Geofence '{$request->name}' saved successfully.");
+        return redirect()->route('tracking.settings')->with('success', "Geofence '{$request->name}' saved successfully.");
     }
 
     /**
@@ -613,7 +639,7 @@ class TrackingWebController extends Controller
     public function deleteGeofence($id)
     {
         Geofence::findOrFail($id)->delete();
-        return back()->with('success', 'Geofence removed.');
+        return redirect()->route('tracking.settings')->with('success', 'Geofence removed successfully.');
     }
 
     /**
