@@ -19,6 +19,7 @@ use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\TicketController;
 use App\Http\Controllers\UserController;
+use App\Http\Controllers\TrackingWebController;
 use Illuminate\Support\Facades\Route;
 
 
@@ -285,6 +286,27 @@ Route::middleware('auth')->group(function () {
         Route::match(['post', 'patch'], '/{user}/toggle-status', [UserController::class, 'toggleStatus'])->name('toggle-status');
         Route::match(['post', 'patch'], '/{user}/toggle-status/alias', [UserController::class, 'toggleStatus'])->name('toggleStatus');
         Route::post('/{user}/test-push', [UserController::class, 'testPush'])->name('test-push');
+    });
+
+    // ─── FIELD ENGINEER LIVE FLEET & ATTENDANCE TRACKING (Secured with Lock) ───
+    Route::get('/tracking/lock', [TrackingWebController::class, 'showLock'])->name('tracking.lock.show');
+    Route::post('/tracking/unlock', [TrackingWebController::class, 'unlock'])->name('tracking.unlock');
+
+    Route::prefix('tracking')->name('tracking.')->middleware(['tracking.lock'])->group(function () {
+        Route::get('/', function() { return redirect()->route('tracking.live'); });
+        Route::get('/live', [TrackingWebController::class, 'live'])->name('live');
+        Route::get('/live-data', [TrackingWebController::class, 'liveData'])->name('live-data');
+        Route::get('/playback', [TrackingWebController::class, 'playback'])->name('playback');
+        Route::get('/reports', [TrackingWebController::class, 'reports'])->name('reports');
+        Route::get('/reports/export-csv', [TrackingWebController::class, 'exportCsv'])->name('reports.export-csv');
+        Route::get('/attendance', [TrackingWebController::class, 'attendance'])->name('attendance');
+        Route::post('/attendance/override', [TrackingWebController::class, 'overrideAttendance'])->name('attendance.override');
+        Route::get('/settings', [TrackingWebController::class, 'settings'])->name('settings');
+        Route::post('/settings', [TrackingWebController::class, 'saveSettings'])->name('settings.save');
+        Route::post('/settings/geofences', [TrackingWebController::class, 'saveGeofence'])->name('settings.geofence.save');
+        Route::delete('/settings/geofences/{geofence}', [TrackingWebController::class, 'deleteGeofence'])->name('settings.geofence.delete');
+        Route::post('/reprocess', [TrackingWebController::class, 'reprocess'])->name('reprocess');
+        Route::post('/ai-review', [TrackingWebController::class, 'aiReview'])->name('ai-review');
     });
 });
 

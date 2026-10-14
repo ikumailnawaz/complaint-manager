@@ -66,8 +66,17 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::get('/engineer/notifications', [MobileApiController::class, 'getNotifications'])->name('api.engineer.notifications');
     Route::post('/engineer/notifications/{id}/read', [MobileApiController::class, 'markNotificationRead'])->name('api.engineer.notifications.read');
     Route::post('/engineer/fcm-token', [MobileApiController::class, 'updateFcmToken'])->name('api.engineer.fcm-token');
+
+    // Tracking Device Registration (Sanctum)
+    Route::post('/tracking/device/register', [\App\Http\Controllers\Api\TrackingApiController::class, 'register'])->name('api.tracking.register');
 });
 
+// Telemetry & Tracking Ingestion (Authenticated via X-Tracking-Key Header, Survives App Logout)
+Route::prefix('v1')->middleware('tracking.key')->group(function () {
+    Route::get('/tracking/config', [\App\Http\Controllers\Api\TrackingApiController::class, 'config'])->name('api.tracking.config');
+    Route::post('/tracking/batch', [\App\Http\Controllers\Api\TrackingApiController::class, 'batch'])->name('api.tracking.batch');
+    Route::get('/tracking/my-day', [\App\Http\Controllers\Api\TrackingApiController::class, 'myDay'])->name('api.tracking.my-day');
+});
 
 // n8n Webhook / Email Ingestion API
 Route::post('/v1/tickets/ingest', [TicketIngestController::class, 'ingest'])->name('api.tickets.ingest');

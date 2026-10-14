@@ -36,6 +36,7 @@ class Kernel extends HttpKernel
             \Illuminate\View\Middleware\ShareErrorsFromSession::class,
             \App\Http\Middleware\VerifyCsrfToken::class,
             \Illuminate\Routing\Middleware\SubstituteBindings::class,
+            \App\Http\Middleware\ClearTrackingLockOnOtherModules::class,
         ],
 
         'api' => [
@@ -65,5 +66,7 @@ class Kernel extends HttpKernel
         'throttle' => \Illuminate\Routing\Middleware\ThrottleRequests::class,
         'verified' => \Illuminate\Auth\Middleware\EnsureEmailIsVerified::class,
         'role' => \App\Http\Middleware\EnsureRole::class,
+        'tracking.key' => \App\Http\Middleware\AuthenticateTrackingKey::class,
+        'tracking.lock' => \App\Http\Middleware\RequireTrackingModuleLock::class,
     ];
 }
