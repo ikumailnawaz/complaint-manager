@@ -174,9 +174,9 @@ class TrackingEngine
                 ['user_id' => $user->id, 'date' => $d],
                 ['needs_processing' => true]
             );
-            // Also process immediate trips & attendance for this day
-            $this->processUserDate($user->id, $d);
+            // Also process immediate attendance & trips for this day
             $this->processAttendance($user->id, $d);
+            $this->processUserDate($user->id, $d);
         }
 
         return [
@@ -353,9 +353,31 @@ class TrackingEngine
             }
         }
 
+        // Determine office sign-in and final office departure boundaries
+        $office = Geofence::where('is_attendance_point', true)->where('is_active', true)->first();
+        $firstOfficeIn = null;
+        $lastOfficeOut = null;
+        if ($office) {
+            $officePoints = [];
+            foreach ($cleanPoints as $pt) {
+                if (self::haversine($pt->lat, $pt->lng, $office->lat, $office->lng) <= ($office->radius_m + 20)) {
+                    $officePoints[] = $pt;
+                }
+            }
+            if (!empty($officePoints)) {
+                $firstOfficeIn = Carbon::parse($officePoints[0]->recorded_at);
+                $lastOfficeOut = Carbon::parse($officePoints[count($officePoints) - 1]->recorded_at);
+            }
+        }
+
         // Save segments transactionally
-        DB::transaction(function () use ($userId, $date, $segments, $cleanPoints, $mockCount) {
-            TripSegment::where('user_id', $userId)->where('date', $date)->delete();
+        DB::transaction(function () use ($userId, $date, $segments, $cleanPoints, $mockCount, $firstOfficeIn, $lastOfficeOut) {
+            $dateClean = Carbon::parse($date)->toDateString();
+            TripSegment::where('user_id', $userId)
+                ->where(function($q) use ($dateClean) {
+                    $q->where('date', $dateClean)->orWhere('date', 'like', $dateClean . '%');
+                })
+                ->delete();
 
             $totalDistM = 0;
             $driveSec = 0;
@@ -368,14 +390,29 @@ class TrackingEngine
             $maxSpeed = 0;
 
             foreach ($segments as $idx => $s) {
+                $segStart = Carbon::parse($s['started_at']);
+                $segEnd = Carbon::parse($s['ended_at']);
+
+                // Strictly count km only AFTER first office arrival and BEFORE final office departure
+                $isDutyTravel = true;
+                if ($firstOfficeIn && $lastOfficeOut) {
+                    if ($segEnd->lte($firstOfficeIn)) {
+                        $isDutyTravel = false; // Commute before signing into office
+                    } elseif ($segStart->gte($lastOfficeOut)) {
+                        $isDutyTravel = false; // Commute after leaving office for the day
+                    }
+                }
+
                 $s['user_id'] = $userId;
-                $s['date'] = $date;
+                $s['date'] = $dateClean;
                 $s['seq'] = $idx + 1;
                 TripSegment::create($s);
 
                 if ($s['type'] === 'drive') {
-                    $totalDistM += $s['distance_m'];
-                    $driveSec += $s['duration_sec'];
+                    if ($isDutyTravel) {
+                        $totalDistM += $s['distance_m'];
+                        $driveSec += $s['duration_sec'];
+                    }
                     if (($s['max_speed_kmh'] ?? 0) > $maxSpeed) {
                         $maxSpeed = $s['max_speed_kmh'];
                     }

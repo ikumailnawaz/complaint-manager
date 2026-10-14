@@ -81,7 +81,30 @@ class TrackingWebController extends Controller
 
         $geofences = Geofence::active()->get();
 
-        return view('tracking.live', compact('engineers', 'geofences'));
+        $bankBranches = Ticket::whereNotNull('bank_name')
+            ->whereNotIn('status', ['closed'])
+            ->get(['id', 'ticket_no', 'bank_name', 'branch_name', 'branch_location', 'branch_address', 'status'])
+            ->map(function ($ticket) {
+                $coords = $this->aiService->resolveBranchCoordinates($ticket);
+                if ($coords) {
+                    return [
+                        'id' => $ticket->id,
+                        'ticket_no' => $ticket->ticket_no,
+                        'bank_name' => $ticket->bank_name,
+                        'branch_name' => $ticket->branch_name,
+                        'address' => $ticket->branch_address ?? $ticket->branch_location,
+                        'lat' => $coords['lat'],
+                        'lng' => $coords['lng'],
+                        'landmark' => $coords['landmark'] ?? '',
+                        'status' => $ticket->status,
+                    ];
+                }
+                return null;
+            })
+            ->filter()
+            ->values();
+
+        return view('tracking.live', compact('engineers', 'geofences', 'bankBranches'));
     }
 
     /**
@@ -208,8 +231,31 @@ class TrackingWebController extends Controller
         $allEngineers = User::whereIn('role', ['engineer', 'workshop_technician', 'admin'])->orderBy('name')->get();
         $geofences = Geofence::active()->get();
 
+        $bankBranches = Ticket::whereNotNull('bank_name')
+            ->whereNotIn('status', ['closed'])
+            ->get(['id', 'ticket_no', 'bank_name', 'branch_name', 'branch_location', 'branch_address', 'status'])
+            ->map(function ($ticket) {
+                $coords = $this->aiService->resolveBranchCoordinates($ticket);
+                if ($coords) {
+                    return [
+                        'id' => $ticket->id,
+                        'ticket_no' => $ticket->ticket_no,
+                        'bank_name' => $ticket->bank_name,
+                        'branch_name' => $ticket->branch_name,
+                        'address' => $ticket->branch_address ?? $ticket->branch_location,
+                        'lat' => $coords['lat'],
+                        'lng' => $coords['lng'],
+                        'landmark' => $coords['landmark'] ?? '',
+                        'status' => $ticket->status,
+                    ];
+                }
+                return null;
+            })
+            ->filter()
+            ->values();
+
         return view('tracking.playback', compact(
-            'engineer', 'date', 'summary', 'attendance', 'segments', 'rawPoints', 'allEngineers', 'geofences'
+            'engineer', 'date', 'summary', 'attendance', 'segments', 'rawPoints', 'allEngineers', 'geofences', 'bankBranches'
         ));
     }
 

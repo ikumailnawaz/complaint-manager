@@ -127,13 +127,13 @@
                             ? ($kind === 'office' ? 'border-indigo-200 bg-indigo-50/30' : ($kind === 'ticket_site' ? 'border-sky-200 bg-sky-50/30' : 'border-amber-200 bg-amber-50/30'))
                             : 'border-slate-200 bg-slate-50/40';
                     @endphp
-                    <div class="p-3 rounded-xl border {{ $bgCard }} transition hover:shadow-xs cursor-pointer" onclick="jumpToSegment({{ $idx }}, {{ $seg->lat }}, {{ $seg->lng }})">
+                    <div id="itinerary-card-{{ $idx }}" class="itinerary-card p-3 rounded-xl border {{ $bgCard }} transition hover:shadow-xs cursor-pointer group" onclick="jumpToSegment({{ $idx }}, {{ $seg->lat }}, {{ $seg->lng }})">
                         <div class="flex items-center justify-between mb-1">
                             <span class="text-[10px] font-mono font-bold text-slate-400">
                                 {{ Carbon\Carbon::parse($seg->started_at)->format('h:i A') }} - {{ Carbon\Carbon::parse($seg->ended_at)->format('h:i A') }}
                             </span>
                             @if($isStop)
-                                <span class="text-[10px] px-2 py-0.5 rounded-full font-bold {{ $kind === 'office' ? 'bg-indigo-100 text-indigo-700' : ($kind === 'ticket_site' ? 'bg-sky-100 text-sky-700' : 'bg-amber-100 text-amber-700') }}">
+                                <span class="text-[10px] px-2 py-0.5 rounded-full font-bold {{ $kind === 'office' ? 'bg-indigo-100 text-indigo-700' : ($kind === 'ticket_site' ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-amber-100 text-amber-700') }}">
                                     Stop: {{ round($seg->duration_sec / 60) }}m
                                 </span>
                             @else
@@ -143,12 +143,18 @@
                             @endif
                         </div>
                         <div class="font-bold text-xs text-slate-900 flex items-center space-x-1.5">
-                            <i class="fa-solid {{ $isStop ? ($kind === 'office' ? 'fa-building text-indigo-600' : ($kind === 'ticket_site' ? 'fa-building-columns text-sky-600' : 'fa-clock text-amber-600')) : 'fa-motorcycle text-slate-600' }}"></i>
+                            <i class="fa-solid {{ $isStop ? ($kind === 'office' ? 'fa-building text-indigo-600' : ($kind === 'ticket_site' ? 'fa-building-columns text-emerald-600' : 'fa-clock text-amber-600')) : 'fa-motorcycle text-slate-600' }}"></i>
                             <span>{{ $seg->label }}</span>
                         </div>
                         @if($seg->address)
                             <div class="text-[11px] text-slate-500 mt-1 line-clamp-1">{{ $seg->address }}</div>
                         @endif
+                        <div class="mt-2 pt-1.5 border-t border-slate-200/60 flex items-center justify-between text-[11px] text-indigo-600 font-bold group-hover:text-indigo-700">
+                            <span class="flex items-center gap-1">
+                                <i class="fa-solid fa-play text-[9px]"></i> Simulate this leg
+                            </span>
+                            <i class="fa-solid fa-chevron-right text-[10px] text-slate-300 group-hover:text-indigo-600 group-hover:translate-x-0.5 transition"></i>
+                        </div>
                     </div>
                 @empty
                     <div class="p-8 text-center text-xs text-slate-400">
@@ -165,6 +171,7 @@ let map;
 let routePoints = @json($rawPoints);
 let segments = @json($segments);
 let geofences = @json($geofences);
+let bankBranches = @json($bankBranches ?? []);
 
 let polyline;
 let bikeMarker;
@@ -183,28 +190,34 @@ function initPlaybackMap() {
     const startLat = routePoints.length > 0 ? routePoints[0].lat : 31.5397357;
     const startLng = routePoints.length > 0 ? routePoints[0].lng : 74.3306892;
 
-    // English Street Map (Esri World Street Map - 100% Free, English labels, no API key required)
-    const englishStreets = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
-        maxZoom: 19,
-        attribution: 'Tiles &copy; Esri &mdash; English Street Map'
+    // Initialize Map with Center View
+    map = L.map('playback_map').setView([startLat, startLng], 13);
+
+    // 1. Google Maps Road & Bank POI Layer (Shows all Banks, ATMs, and English street names)
+    const googleStreets = L.tileLayer('https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
+        maxZoom: 20,
+        attribution: '&copy; Google Maps'
     });
 
-    const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-        maxZoom: 19,
-        attribution: 'Tiles &copy; Esri World Imagery'
+    // 2. Google Hybrid (Satellite + Road Names)
+    const googleHybrid = L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+        maxZoom: 20,
+        attribution: '&copy; Google Maps Satellite'
     });
 
-    const osm = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    // 3. Esri World Street Map
+    const esriStreets = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
         maxZoom: 19,
-        attribution: '&copy; OpenStreetMap'
+        attribution: 'Tiles &copy; Esri World Street Map'
     });
 
-    englishStreets.addTo(map);
+    // Default to Google Maps with Banks
+    googleStreets.addTo(map);
 
     L.control.layers({
-        "English Map": englishStreets,
-        "Satellite": satellite,
-        "OSM": osm
+        "Google Maps (Banks & Streets)": googleStreets,
+        "Google Satellite": googleHybrid,
+        "Esri English Streets": esriStreets
     }, null, { position: 'topright' }).addTo(map);
 
     // Draw Geofences
@@ -215,6 +228,37 @@ function initPlaybackMap() {
             fillOpacity: 0.15,
             radius: gf.radius_m
         }).addTo(map).bindPopup("<b>" + gf.name + "</b> (Attendance Geofence)");
+    });
+
+    // Plot Bank Branches from Active Complaints (Banks similar to Google Maps)
+    bankBranches.forEach(b => {
+        const bankIcon = L.divIcon({
+            html: `
+                <div style="background-color: #059669;" class="w-8 h-8 rounded-xl text-white flex items-center justify-center shadow-lg border-2 border-white hover:scale-110 transition cursor-pointer" title="${b.bank_name} - ${b.branch_name}">
+                    <i class="fa-solid fa-building-columns text-sm"></i>
+                </div>
+            `,
+            className: 'bank-pin-marker',
+            iconSize: [32, 32],
+            iconAnchor: [16, 16],
+            popupAnchor: [0, -16]
+        });
+
+        L.marker([b.lat, b.lng], { icon: bankIcon })
+            .addTo(map)
+            .bindPopup(`
+                <div class="p-2 space-y-1 text-xs font-sans min-w-[200px]">
+                    <div class="font-bold text-emerald-800 flex items-center gap-1.5">
+                        <i class="fa-solid fa-building-columns"></i> <span>${b.bank_name}</span>
+                    </div>
+                    <div class="font-semibold text-slate-800">${b.branch_name}</div>
+                    <div class="text-[11px] text-slate-500">${b.address || ''}</div>
+                    <div class="pt-1.5 mt-1 border-t border-slate-100 flex items-center justify-between">
+                        <span class="font-mono text-[10px] text-indigo-600 font-bold">#${b.ticket_no}</span>
+                        <span class="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 text-[10px] font-bold uppercase">Complaint Bank</span>
+                    </div>
+                </div>
+            `);
     });
 
     if (routePoints.length === 0) {
@@ -401,10 +445,44 @@ function calculateBearing(lat1, lon1, lat2, lon2) {
 }
 
 function jumpToSegment(idx, lat, lng) {
-    pausePlayback();
-    if (lat && lng) {
-        map.flyTo([lat, lng], 15, { duration: 1 });
+    if (idx < 0 || idx >= segments.length) return;
+    const seg = segments[idx];
+
+    // Find the closest point in routePoints
+    let bestIdx = 0;
+    let minDiff = Infinity;
+
+    if (routePoints && routePoints.length > 0) {
+        routePoints.forEach((pt, pIdx) => {
+            if (pt.lat && pt.lng && lat && lng) {
+                const d = Math.hypot(pt.lat - lat, pt.lng - lng);
+                if (d < minDiff) {
+                    minDiff = d;
+                    bestIdx = pIdx;
+                }
+            }
+        });
     }
+
+    // Set animation to that point
+    currentIndex = bestIdx;
+    stepTo(currentIndex);
+
+    if (lat && lng) {
+        map.flyTo([lat, lng], 15, { duration: 0.6 });
+    }
+
+    // Highlight timeline card
+    document.querySelectorAll('.itinerary-card').forEach((card, i) => {
+        if (i === idx) {
+            card.classList.add('ring-2', 'ring-indigo-500', 'shadow-md');
+        } else {
+            card.classList.remove('ring-2', 'ring-indigo-500', 'shadow-md');
+        }
+    });
+
+    // Start simulating automatically from this leg
+    startPlayback();
 }
 </script>
 @endsection

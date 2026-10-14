@@ -114,6 +114,10 @@
                     <span class="w-3 h-3 rounded-full bg-indigo-500"></span>
                     <span class="text-slate-700">Office Geofence</span>
                 </div>
+                <div class="flex items-center space-x-2">
+                    <span class="w-3.5 h-3.5 rounded-md bg-emerald-600 flex items-center justify-center text-[8px] text-white font-bold"><i class="fa-solid fa-building-columns"></i></span>
+                    <span class="text-slate-700">Complaint Bank Branch</span>
+                </div>
             </div>
         </div>
     </div>
@@ -123,7 +127,9 @@
 let map;
 let markers = {};
 let geofenceCircles = [];
+let bankMarkers = [];
 let engineersData = [];
+let bankBranches = @json($bankBranches ?? []);
 let countdown = 15;
 let timer;
 
@@ -139,28 +145,30 @@ document.addEventListener('DOMContentLoaded', function() {
 function initMap() {
     map = L.map('live_map', { zoomControl: true }).setView([defaultLat, defaultLng], 12);
 
-    // English Street Map (Esri World Street Map - 100% Free, English labels, no API key required)
-    const englishStreets = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
-        maxZoom: 19,
-        attribution: 'Tiles &copy; Esri &mdash; English Street Map'
+    // 1. Google Maps Road & Bank POI Layer (Shows all Banks, ATMs, and English street names)
+    const googleStreets = L.tileLayer('https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
+        maxZoom: 20,
+        attribution: '&copy; Google Maps'
     });
 
-    const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-        maxZoom: 19,
-        attribution: 'Tiles &copy; Esri World Imagery'
+    // 2. Google Hybrid (Satellite + Road Names)
+    const googleHybrid = L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+        maxZoom: 20,
+        attribution: '&copy; Google Maps Satellite'
     });
 
-    const osm = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    // 3. Esri World Street Map
+    const esriStreets = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
         maxZoom: 19,
-        attribution: '&copy; OpenStreetMap'
+        attribution: 'Tiles &copy; Esri World Street Map'
     });
 
-    englishStreets.addTo(map);
+    googleStreets.addTo(map);
 
     L.control.layers({
-        "English Map": englishStreets,
-        "Satellite": satellite,
-        "OSM": osm
+        "Google Maps (Banks & Streets)": googleStreets,
+        "Google Satellite": googleHybrid,
+        "Esri English Streets": esriStreets
     }, null, { position: 'topright' }).addTo(map);
 
     // Plot initial Geofences
@@ -173,6 +181,38 @@ function initMap() {
         }).addTo(map).bindPopup("<b>{{ $gf->name }}</b><br>Attendance Geofence (Radius: {{ $gf->radius_m }}m)");
         geofenceCircles.push(circle_{{ $gf->id }});
     @endforeach
+
+    // Plot Bank Branches from Active Complaints (Banks similar to Google Maps)
+    bankBranches.forEach(b => {
+        const bankIcon = L.divIcon({
+            html: `
+                <div style="background-color: #059669;" class="w-8 h-8 rounded-xl text-white flex items-center justify-center shadow-lg border-2 border-white hover:scale-110 transition cursor-pointer" title="${b.bank_name} - ${b.branch_name}">
+                    <i class="fa-solid fa-building-columns text-sm"></i>
+                </div>
+            `,
+            className: 'bank-pin-marker',
+            iconSize: [32, 32],
+            iconAnchor: [16, 16],
+            popupAnchor: [0, -16]
+        });
+
+        const m = L.marker([b.lat, b.lng], { icon: bankIcon })
+            .addTo(map)
+            .bindPopup(`
+                <div class="p-2 space-y-1 text-xs font-sans min-w-[200px]">
+                    <div class="font-bold text-emerald-800 flex items-center gap-1.5">
+                        <i class="fa-solid fa-building-columns"></i> <span>${b.bank_name}</span>
+                    </div>
+                    <div class="font-semibold text-slate-800">${b.branch_name}</div>
+                    <div class="text-[11px] text-slate-500">${b.address || ''}</div>
+                    <div class="pt-1.5 mt-1 border-t border-slate-100 flex items-center justify-between">
+                        <span class="font-mono text-[10px] text-indigo-600 font-bold">#${b.ticket_no}</span>
+                        <span class="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 text-[10px] font-bold uppercase">Complaint Bank</span>
+                    </div>
+                </div>
+            `);
+        bankMarkers.push(m);
+    });
 }
 
 function fetchLiveData() {
