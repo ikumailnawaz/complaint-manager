@@ -299,6 +299,8 @@ Route::middleware('auth')->group(function () {
         Route::get('/live', [TrackingWebController::class, 'live'])->name('live');
         Route::get('/live-data', [TrackingWebController::class, 'liveData'])->name('live-data');
         Route::get('/playback', [TrackingWebController::class, 'playback'])->name('playback');
+        Route::get('/playback/{id}', [TrackingWebController::class, 'playback'])->name('playback.id');
+        Route::get('/engineer/{id}', [TrackingWebController::class, 'playback'])->name('engineer.playback');
         Route::get('/reports', [TrackingWebController::class, 'reports'])->name('reports');
         Route::get('/reports/export-csv', [TrackingWebController::class, 'exportCsv'])->name('reports.export-csv');
         Route::get('/attendance', [TrackingWebController::class, 'attendance'])->name('attendance');

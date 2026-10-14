@@ -167,11 +167,23 @@ class TrackingWebController extends Controller
 
         $date = $request->query('date', Carbon::today()->toDateString());
 
-        $summary = TrackingDailySummary::where('user_id', $engineer->id)->where('date', $date)->first();
-        $attendance = AttendanceDay::where('user_id', $engineer->id)->where('date', $date)->first();
+        $summary = TrackingDailySummary::where('user_id', $engineer->id)
+            ->where(function($q) use ($date) {
+                $q->where('date', $date)->orWhere('date', 'like', $date . '%');
+            })
+            ->orderByDesc('distance_m')
+            ->first();
+
+        $attendance = AttendanceDay::where('user_id', $engineer->id)
+            ->where(function($q) use ($date) {
+                $q->where('date', $date)->orWhere('date', 'like', $date . '%');
+            })
+            ->first();
 
         $segments = TripSegment::where('user_id', $engineer->id)
-            ->where('date', $date)
+            ->where(function($q) use ($date) {
+                $q->where('date', $date)->orWhere('date', 'like', $date . '%');
+            })
             ->orderBy('started_at', 'asc')
             ->get();
 
@@ -212,7 +224,8 @@ class TrackingWebController extends Controller
         $engineers = User::whereIn('role', ['engineer', 'workshop_technician', 'admin'])->orderBy('name')->get();
 
         if (!$selectedEngineerId && $engineers->isNotEmpty()) {
-            $selectedEngineerId = $engineers->first()->id;
+            $farhan = $engineers->firstWhere('name', 'farhankhalid');
+            $selectedEngineerId = $farhan ? $farhan->id : $engineers->first()->id;
         }
 
         $summary = null;
@@ -224,15 +237,22 @@ class TrackingWebController extends Controller
         if ($range === 'daily') {
             if ($selectedEngineerId) {
                 $summary = TrackingDailySummary::where('user_id', $selectedEngineerId)
-                    ->where('date', $selectedDate)
+                    ->where(function($q) use ($selectedDate) {
+                        $q->where('date', $selectedDate)->orWhere('date', 'like', $selectedDate . '%');
+                    })
+                    ->orderByDesc('distance_m')
                     ->first();
 
                 $attendance = AttendanceDay::where('user_id', $selectedEngineerId)
-                    ->where('date', $selectedDate)
+                    ->where(function($q) use ($selectedDate) {
+                        $q->where('date', $selectedDate)->orWhere('date', 'like', $selectedDate . '%');
+                    })
                     ->first();
 
                 $segments = TripSegment::where('user_id', $selectedEngineerId)
-                    ->where('date', $selectedDate)
+                    ->where(function($q) use ($selectedDate) {
+                        $q->where('date', $selectedDate)->orWhere('date', 'like', $selectedDate . '%');
+                    })
                     ->orderBy('started_at', 'asc')
                     ->get();
 

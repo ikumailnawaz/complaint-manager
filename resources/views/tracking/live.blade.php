@@ -139,11 +139,29 @@ document.addEventListener('DOMContentLoaded', function() {
 function initMap() {
     map = L.map('live_map', { zoomControl: true }).setView([defaultLat, defaultLng], 12);
 
-    // Free OpenStreetMap official tiles (no API key required)
-    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    // English Street Map (Esri World Street Map - 100% Free, English labels, no API key required)
+    const englishStreets = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
         maxZoom: 19,
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-    }).addTo(map);
+        attribution: 'Tiles &copy; Esri &mdash; English Street Map'
+    });
+
+    const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        maxZoom: 19,
+        attribution: 'Tiles &copy; Esri World Imagery'
+    });
+
+    const osm = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap'
+    });
+
+    englishStreets.addTo(map);
+
+    L.control.layers({
+        "English Map": englishStreets,
+        "Satellite": satellite,
+        "OSM": osm
+    }, null, { position: 'topright' }).addTo(map);
 
     // Plot initial Geofences
     @foreach($geofences as $gf)
