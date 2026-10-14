@@ -2,6 +2,7 @@
 
 namespace App\Services\Tracking;
 
+use App\Models\Ticket;
 use App\Models\Tracking\AttendanceDay;
 use App\Models\Tracking\TrackingDailySummary;
 use App\Models\Tracking\TrackingSetting;
@@ -9,6 +10,7 @@ use App\Models\Tracking\TripSegment;
 use App\Models\User;
 use App\Services\GeminiService;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -74,27 +76,30 @@ Focus on:
 EOT;
 
         if ($this->gemini->hasApiKey()) {
-            try {
-                $apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
-                $key = env('GEMINI_API_KEY');
+            $key = env('GEMINI_API_KEY');
+            $models = ['gemini-3.5-flash-lite', 'gemini-3.8-flash', 'gemini-flash-latest'];
 
-                $res = Http::withoutVerifying()->timeout(15)->post("{$apiUrl}?key={$key}", [
-                    'contents' => [['role' => 'user', 'parts' => [['text' => $prompt]]]],
-                    'generationConfig' => ['temperature' => 0.2, 'maxOutputTokens' => 300],
-                ]);
+            foreach ($models as $model) {
+                try {
+                    $apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent";
+                    $res = Http::withoutVerifying()->timeout(15)->post("{$apiUrl}?key={$key}", [
+                        'contents' => [['role' => 'user', 'parts' => [['text' => $prompt]]]],
+                        'generationConfig' => ['temperature' => 0.2, 'maxOutputTokens' => 300],
+                    ]);
 
-                if ($res->successful()) {
-                    $json = $res->json();
-                    $text = $json['candidates'][0]['content']['parts'][0]['text'] ?? null;
-                    if ($text) {
-                        $summary->ai_summary = trim($text);
-                        $summary->ai_generated_at = now();
-                        $summary->save();
-                        return trim($text);
+                    if ($res->successful()) {
+                        $json = $res->json();
+                        $text = $json['candidates'][0]['content']['parts'][0]['text'] ?? null;
+                        if ($text) {
+                            $summary->ai_summary = trim($text);
+                            $summary->ai_generated_at = now();
+                            $summary->save();
+                            return trim($text);
+                        }
                     }
+                } catch (\Throwable $e) {
+                    Log::warning("Gemini Daily Tracking Summary exception on {$model}: " . $e->getMessage());
                 }
-            } catch (\Throwable $e) {
-                Log::warning('Gemini Daily Tracking Summary exception: ' . $e->getMessage());
             }
         }
 
@@ -149,25 +154,28 @@ Return strictly a JSON object:
 EOT;
 
         if ($this->gemini->hasApiKey()) {
-            try {
-                $apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
-                $key = env('GEMINI_API_KEY');
+            $key = env('GEMINI_API_KEY');
+            $models = ['gemini-3.5-flash-lite', 'gemini-3.8-flash', 'gemini-flash-latest'];
 
-                $res = Http::withoutVerifying()->timeout(15)->post("{$apiUrl}?key={$key}", [
-                    'contents' => [['role' => 'user', 'parts' => [['text' => $prompt]]]],
-                    'generationConfig' => ['temperature' => 0.1, 'response_mime_type' => 'application/json'],
-                ]);
+            foreach ($models as $model) {
+                try {
+                    $apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent";
+                    $res = Http::withoutVerifying()->timeout(15)->post("{$apiUrl}?key={$key}", [
+                        'contents' => [['role' => 'user', 'parts' => [['text' => $prompt]]]],
+                        'generationConfig' => ['temperature' => 0.1, 'response_mime_type' => 'application/json'],
+                    ]);
 
-                if ($res->successful()) {
-                    $json = $res->json();
-                    $text = $json['candidates'][0]['content']['parts'][0]['text'] ?? '{}';
-                    $parsed = json_decode(trim($text), true);
-                    if ($parsed && isset($parsed['analysis'])) {
-                        return $parsed;
+                    if ($res->successful()) {
+                        $json = $res->json();
+                        $text = $json['candidates'][0]['content']['parts'][0]['text'] ?? '{}';
+                        $parsed = json_decode(trim($text), true);
+                        if ($parsed && isset($parsed['analysis'])) {
+                            return $parsed;
+                        }
                     }
+                } catch (\Throwable $e) {
+                    Log::warning("Gemini Tuning Exception on {$model}: " . $e->getMessage());
                 }
-            } catch (\Throwable $e) {
-                Log::warning('Gemini Tuning Exception: ' . $e->getMessage());
             }
         }
 
@@ -180,5 +188,105 @@ EOT;
                 'stop_exit_radius_m' => (int)($settings['stop_exit_radius_m'] ?? 150),
             ],
         ];
+    }
+
+    /**
+     * Resolve GPS coordinates for a ticket's bank branch using Gemini AI.
+     * Caches result to avoid repeat API hits.
+     */
+    public function resolveBranchCoordinates($ticket): ?array
+    {
+        if (!$ticket) return null;
+
+        $cacheKey = "ticket_branch_coords_{$ticket->id}";
+        return Cache::remember($cacheKey, 86400 * 30, function () use ($ticket) {
+            $bank = $ticket->bank_name ?? 'Bank';
+            $branch = $ticket->branch_name ?? '';
+            $address = $ticket->branch_address ?? $ticket->branch_location ?? '';
+
+            if (empty($branch) && empty($address)) {
+                return null;
+            }
+
+            $key = env('GEMINI_API_KEY');
+            if (empty($key)) {
+                return null;
+            }
+
+            $models = ['gemini-3.5-flash-lite', 'gemini-3.8-flash', 'gemini-flash-latest'];
+            $prompt = <<<EOT
+You are a Pakistan geospatial geocoding assistant.
+Given a bank branch complaint in Pakistan:
+Bank: {$bank}
+Branch: {$branch}
+Address: {$address}
+
+Identify the main road, plaza, or area landmark in the address (e.g., if address contains 'SHOP NO. 1 TO 5, MALIK PLAZA, MARDAN ROAD, SWABI SHEWA ADDA, TEHSIL RAZZAR, DISTRICT SWABI', identify 'Mardan Road' or 'Malik Plaza, Shewa Adda, Swabi').
+Determine the most accurate GPS latitude and longitude coordinates in Pakistan for this branch, main road, or landmark.
+Return strictly a JSON object:
+{
+  "landmark": "string description of main road or plaza identified",
+  "lat": 31.xxxx,
+  "lng": 74.xxxx,
+  "confidence": "high" | "medium" | "low"
+}
+EOT;
+
+            foreach ($models as $model) {
+                try {
+                    $url = "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent?key={$key}";
+                    $res = Http::withoutVerifying()->timeout(10)->post($url, [
+                        'contents' => [['role' => 'user', 'parts' => [['text' => $prompt]]]],
+                        'generationConfig' => ['response_mime_type' => 'application/json']
+                    ]);
+                    if ($res->successful()) {
+                        $json = $res->json();
+                        $txt = $json['candidates'][0]['content']['parts'][0]['text'] ?? '';
+                        $parsed = json_decode($txt, true);
+                        if ($parsed && isset($parsed['lat'], $parsed['lng']) && is_numeric($parsed['lat']) && is_numeric($parsed['lng'])) {
+                            return [
+                                'lat' => (float)$parsed['lat'],
+                                'lng' => (float)$parsed['lng'],
+                                'landmark' => $parsed['landmark'] ?? $branch,
+                                'confidence' => $parsed['confidence'] ?? 'medium'
+                            ];
+                        }
+                    }
+                } catch (\Throwable $e) {
+                    Log::warning("Gemini branch geocoding failed on {$model}: " . $e->getMessage());
+                }
+            }
+
+            return null;
+        });
+    }
+
+    /**
+     * Check if a stop coordinate is within $maxRadiusM (default 2500m / 2.5km) of any unresolved complaint for this engineer.
+     * Returns matching ticket info array or null.
+     */
+    public function matchStopToUnresolvedComplaints(float $lat, float $lng, $unresolvedTickets, float $maxRadiusM = 2500): ?array
+    {
+        $bestMatch = null;
+        $closestDist = PHP_FLOAT_MAX;
+
+        foreach ($unresolvedTickets as $ticket) {
+            $coords = $this->resolveBranchCoordinates($ticket);
+            if (!$coords) continue;
+
+            $dist = TrackingEngine::haversine($lat, $lng, $coords['lat'], $coords['lng']);
+            if ($dist <= $maxRadiusM && $dist < $closestDist) {
+                $closestDist = $dist;
+                $bestMatch = [
+                    'ticket' => $ticket,
+                    'distance_m' => round($dist),
+                    'coords' => $coords,
+                    'label' => "Potentially Complaint for {$ticket->bank_name} - {$ticket->branch_name}",
+                    'address' => "Potentially Complaint for {$ticket->bank_name} - {$ticket->branch_name} (#{$ticket->ticket_no})",
+                ];
+            }
+        }
+
+        return $bestMatch;
     }
 }

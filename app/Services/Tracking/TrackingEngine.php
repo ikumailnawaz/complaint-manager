@@ -525,14 +525,22 @@ class TrackingEngine
             }
         }
 
-        // 2. Check nearby tickets (site visits)
-        // Match branch names / keywords or locations
-        foreach ($tickets as $t) {
-            // If branch has approximate lat/lng or matches city/branch
-            $loc = $t->branch_location ?? $t->branch_name ?? '';
-            // If ticket has specific coordinates or city landmark
-            if (!empty($loc)) {
-                // Heuristic: if branch is near known area
+        // 2. Check nearby tickets (unresolved complaints for this engineer within 2.5km via Gemini)
+        if ($tickets && count($tickets) > 0) {
+            try {
+                $aiService = app(TrackingAiService::class);
+                $match = $aiService->matchStopToUnresolvedComplaints($lat, $lng, $tickets, 2500);
+                if ($match) {
+                    return [
+                        'kind'        => 'ticket_site',
+                        'label'       => $match['label'],
+                        'address'     => $match['address'],
+                        'ticket_id'   => $match['ticket']->id,
+                        'geofence_id' => null,
+                    ];
+                }
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('Error matching tickets in labelStop: ' . $e->getMessage());
             }
         }
 
