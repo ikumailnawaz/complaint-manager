@@ -207,7 +207,7 @@ class TrackingApiController extends Controller
             'max_accuracy_m'          => (int)($settings['max_accuracy_m'] ?? 50),
             'upload_interval_sec'     => (int)($settings['upload_interval_sec'] ?? 120),
             'heartbeat_interval_sec'  => (int)($settings['heartbeat_interval_sec'] ?? 900),
-            'attendance_dwell_sec'    => (int)($settings['attendance_dwell_sec'] ?? 120),
+            'attendance_dwell_sec'    => (int)($settings['attendance_dwell_sec'] ?? 30),
             'geofences'               => $geofences,
             'server_time'             => Carbon::now()->toIso8601String(),
             'config_version'          => md5(json_encode($settings) . json_encode($geofences)),

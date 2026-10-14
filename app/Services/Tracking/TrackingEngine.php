@@ -614,41 +614,101 @@ class TrackingEngine
             return;
         }
 
-        // Fetch points of the day that are within the office geofence
+        // Fetch points of the day sorted chronologically
         $rawPoints = LocationPoint::where('user_id', $userId)
             ->whereBetween('recorded_at', [$startOfDay, $endOfDay])
             ->orderBy('recorded_at', 'asc')
             ->get();
 
-        $insidePoints = [];
-        foreach ($rawPoints as $pt) {
-            if (self::haversine($pt->lat, $pt->lng, $office->lat, $office->lng) <= ($office->radius_m + 20)) {
-                $insidePoints[] = $pt;
-            }
-        }
-
-        // Check if manual record exists
         $att = AttendanceDay::firstOrNew(['user_id' => $userId, 'date' => $date]);
         $att->geofence_id = $office->id;
 
-        if (!empty($insidePoints)) {
-            $firstIn = Carbon::parse($insidePoints[0]->recorded_at);
-            $lastOut = Carbon::parse($insidePoints[count($insidePoints) - 1]->recorded_at);
+        if ($rawPoints->isEmpty()) {
+            $isWorkDay = in_array(Carbon::parse($date)->dayOfWeekIso, $settings['work_days'] ?? [1,2,3,4,5,6]);
+            $att->status = $isWorkDay ? 'absent' : 'off_day';
+            $att->save();
+            return;
+        }
 
-            $lastTotalPt = $rawPoints[count($rawPoints) - 1];
-            $stillInside = (self::haversine($lastTotalPt->lat, $lastTotalPt->lng, $office->lat, $office->lng) <= ($office->radius_m + 20));
+        $officeRadiusThreshold = $office->radius_m + 25; // 25m buffer for GPS accuracy jitter
+
+        // Segment raw points into distinct visits
+        $visits = [];
+        $currentVisitStart = null;
+        $lastInsidePt = null;
+        $consecutiveOutside = 0;
+
+        foreach ($rawPoints as $pt) {
+            $dist = self::haversine($pt->lat, $pt->lng, $office->lat, $office->lng);
+            $isPtInside = ($dist <= $officeRadiusThreshold);
+            $ptTime = Carbon::parse($pt->recorded_at);
+
+            if ($isPtInside) {
+                $consecutiveOutside = 0;
+                if ($currentVisitStart === null) {
+                    $currentVisitStart = $ptTime;
+                }
+                $lastInsidePt = $pt;
+            } else {
+                if ($currentVisitStart !== null) {
+                    $consecutiveOutside++;
+                    // If 2 or more points outside OR moved > radius + 40m, close this office visit
+                    if ($consecutiveOutside >= 2 || $dist > ($office->radius_m + 40)) {
+                        $endTime = $lastInsidePt ? Carbon::parse($lastInsidePt->recorded_at) : $currentVisitStart;
+                        $visits[] = [
+                            'start' => $currentVisitStart,
+                            'end'   => $endTime,
+                            'minutes' => (int)max(1, $currentVisitStart->diffInMinutes($endTime)),
+                        ];
+                        $currentVisitStart = null;
+                        $lastInsidePt = null;
+                    }
+                }
+            }
+        }
+
+        // Check latest point of the day: is engineer currently inside?
+        $lastTotalPt = $rawPoints[count($rawPoints) - 1];
+        $lastPtDist = self::haversine($lastTotalPt->lat, $lastTotalPt->lng, $office->lat, $office->lng);
+        $stillInside = ($lastPtDist <= $officeRadiusThreshold);
+
+        // If currently inside, close active ongoing visit
+        if ($currentVisitStart !== null) {
+            $endTime = $lastInsidePt ? Carbon::parse($lastInsidePt->recorded_at) : $currentVisitStart;
+            $visits[] = [
+                'start' => $currentVisitStart,
+                'end'   => $endTime,
+                'minutes' => (int)max(1, $currentVisitStart->diffInMinutes($endTime)),
+            ];
+        }
+
+        // Also check explicit geofence_enter events from mobile
+        $enterEventsCount = TrackingEvent::where('user_id', $userId)
+            ->where('geofence_id', $office->id)
+            ->where('type', 'geofence_enter')
+            ->whereBetween('recorded_at', [$startOfDay, $endOfDay])
+            ->count();
+
+        if (!empty($visits)) {
+            $firstIn = $visits[0]['start'];
+            $lastOut = $visits[count($visits) - 1]['end'];
 
             $att->first_in = $firstIn;
             $att->last_out = $stillInside ? null : $lastOut;
             $att->still_inside = $stillInside;
-            $att->office_visits = max(1, $att->office_visits);
+            $att->office_visits = max(count($visits), $enterEventsCount, 1);
 
-            if (!$stillInside && $lastOut->gt($firstIn)) {
-                $att->office_minutes = (int)$firstIn->diffInMinutes($lastOut);
-            } elseif ($stillInside) {
-                $latestPointTime = Carbon::parse($lastTotalPt->recorded_at);
-                $att->office_minutes = (int)max(1, $firstIn->diffInMinutes($latestPointTime));
+            // Sum up total minutes spent inside office across all visits
+            $totalOfficeMinutes = 0;
+            foreach ($visits as $idx => $v) {
+                // If this is the last visit and still inside today, calculate up to now()
+                if ($stillInside && $idx === (count($visits) - 1) && Carbon::parse($date)->isToday()) {
+                    $totalOfficeMinutes += (int)max(1, $v['start']->diffInMinutes(now()));
+                } else {
+                    $totalOfficeMinutes += $v['minutes'];
+                }
             }
+            $att->office_minutes = $totalOfficeMinutes;
 
             // Determine status
             if ($firstIn->lte($lateCutoff)) {
