@@ -505,7 +505,7 @@
             <div class="flex flex-wrap items-center gap-2">
                 @if($ticket->status === 'awaiting_workshop' && auth()->user()->isSuperior())
                     <button type="button"
-                            onclick="openWorkshopReceiveModal({{ $ticket->id }}, '{{ $ticket->ticket_no }}', '{{ addslashes($ticket->bank_name) }}', '{{ addslashes($ticket->workshop_location ?? '') }}')"
+                            onclick="openWorkshopReceiveModal({{ $ticket->id }}, '{{ $ticket->ticket_no }}', '{{ addslashes($ticket->bank_name) }}', '{{ addslashes($ticket->workshop_location ?? '') }}', '{{ addslashes($ticket->branch_city ?? $ticket->branch_location ?? '') }}', '{{ addslashes($ticket->originalFieldEngineer->base_city ?? $ticket->engineer->base_city ?? '') }}')"
                             class="px-3.5 py-1.5 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg text-xs shadow-sm transition inline-flex items-center gap-1.5 cursor-pointer">
                         <i class="fa-solid fa-box-open"></i>
                         <span>Receive at Workshop &amp; Assign Tech</span>
@@ -1790,7 +1790,7 @@
             <!-- Workshop & Lifecycle Stage Actions -->
             @if($ticket->status === 'awaiting_workshop')
                 <button type="button" 
-                        onclick="openWorkshopReceiveModal({{ $ticket->id }}, '{{ $ticket->ticket_no }}', '{{ addslashes($ticket->bank_name) }}', '{{ addslashes($ticket->workshop_location ?? '') }}')"
+                        onclick="openWorkshopReceiveModal({{ $ticket->id }}, '{{ $ticket->ticket_no }}', '{{ addslashes($ticket->bank_name) }}', '{{ addslashes($ticket->workshop_location ?? '') }}', '{{ addslashes($ticket->branch_city ?? $ticket->branch_location ?? '') }}', '{{ addslashes($ticket->originalFieldEngineer->base_city ?? $ticket->engineer->base_city ?? '') }}')"
                         class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg text-xs shadow-sm transition flex items-center space-x-1.5 cursor-pointer">
                     <i class="fa-solid fa-box-open"></i>
                     <span>Receive at Workshop &amp; Assign Tech</span>

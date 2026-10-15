@@ -296,7 +296,7 @@
                             <td class="px-4 py-3.5 text-right space-x-1.5 whitespace-nowrap">
                                 @if($t->status === 'awaiting_workshop' && auth()->user()->isSuperior())
                                     <button type="button"
-                                            onclick="openWorkshopReceiveModal({{ $t->id }}, '{{ $t->ticket_no }}', '{{ addslashes($t->bank_name) }}', '{{ addslashes($t->workshop_location ?? '') }}')"
+                                            onclick="openWorkshopReceiveModal({{ $t->id }}, '{{ $t->ticket_no }}', '{{ addslashes($t->bank_name) }}', '{{ addslashes($t->workshop_location ?? '') }}', '{{ addslashes($t->branch_city ?? $t->branch_location ?? '') }}', '{{ addslashes($t->originalFieldEngineer->base_city ?? $t->engineer->base_city ?? '') }}')"
                                             class="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg text-xs shadow-xs transition inline-flex items-center gap-1 cursor-pointer">
                                         <i class="fa-solid fa-box-open"></i>
                                         <span>Receive at Workshop</span>

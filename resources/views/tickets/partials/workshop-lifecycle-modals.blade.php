@@ -19,32 +19,71 @@
             @csrf
             <div>
                 <label class="block font-bold text-slate-700 mb-1">
-                    Assign Workshop Incharge (Handover to) <span class="text-rose-500">*</span>
+                    Workshop Facility Location <span class="text-rose-500">*</span>
                 </label>
-                @php
-                    $inchargeUsers = \App\Models\User::where(function($q) {
-                        $q->whereIn('role', ['workshop_incharge', 'office_staff', 'admin', 'coordinator'])
-                          ->orWhere('name', 'like', '%ikram%');
-                    })->orderByRaw("CASE WHEN role = 'workshop_incharge' THEN 1 WHEN name LIKE '%ikram%' THEN 2 ELSE 3 END, name ASC")->get();
-                    $defaultIncharge = \App\Models\User::where('role', 'workshop_incharge')->first()
-                        ?? \App\Models\User::where('name', 'like', '%ikram%')->first()
-                        ?? $inchargeUsers->first();
-                @endphp
-                <select name="workshop_incharge_id" required class="w-full border border-slate-300 rounded-xl p-2.5 text-xs focus:ring-2 focus:ring-purple-500 focus:outline-none bg-white">
-                    @foreach($inchargeUsers as $inc)
-                        <option value="{{ $inc->id }}" {{ $defaultIncharge && $defaultIncharge->id === $inc->id ? 'selected' : '' }}>
-                            {{ $inc->name }} ({{ ucfirst(str_replace('_', ' ', $inc->role)) }} - {{ $inc->base_city ?? 'Lahore' }})
-                        </option>
-                    @endforeach
+                <select name="workshop_location" id="workshopReceiveLocation" onchange="onWorkshopLocationChanged(this.value)" required class="w-full border border-slate-300 rounded-xl p-2.5 text-xs focus:ring-2 focus:ring-purple-500 focus:outline-none bg-white font-semibold">
+                    <option value="Karachi Hub Workshop">Karachi Hub Workshop (Karachi &amp; Sindh)</option>
+                    <option value="Lahore Central Workshop">Lahore Central Workshop (Lahore &amp; Punjab)</option>
+                    <option value="Islamabad Regional Workshop">Islamabad Regional Workshop (Islamabad / Rawalpindi / KP)</option>
+                    <option value="Multan Service Center">Multan Service Center (South Punjab)</option>
                 </select>
-                <p class="text-[11px] text-purple-600 mt-1">Incharge (Ikram) will receive immediate push alert and WhatsApp notification to realign machine to bench tech.</p>
+                <p class="text-[11px] text-slate-500 mt-1">Select the physical workshop facility receiving this machine.</p>
             </div>
             <div>
                 <label class="block font-bold text-slate-700 mb-1">
-                    Workshop Location
+                    Assign Workshop Incharge / Bench Handler <span class="text-rose-500">*</span>
                 </label>
-                <input type="text" name="workshop_location" value="Lahore Central Workshop"
-                       class="w-full border border-slate-300 rounded-xl p-2.5 text-xs focus:ring-2 focus:ring-purple-500 focus:outline-none bg-white">
+                @php
+                    $allStaffAndEngineers = \App\Models\User::orderBy('name')->get();
+                    $inchargeUsers = $allStaffAndEngineers->filter(function($u) {
+                        return in_array($u->role, ['workshop_incharge', 'office_staff', 'admin', 'coordinator']);
+                    });
+                    $karachiEngineers = $allStaffAndEngineers->filter(function($u) {
+                        return in_array($u->role, ['engineer', 'workshop_engineer']) && stripos($u->base_city ?? '', 'karachi') !== false;
+                    });
+                    $lahoreEngineers = $allStaffAndEngineers->filter(function($u) {
+                        return in_array($u->role, ['engineer', 'workshop_engineer']) && (stripos($u->base_city ?? '', 'lahore') !== false || empty($u->base_city));
+                    });
+                    $otherEngineers = $allStaffAndEngineers->filter(function($u) {
+                        return in_array($u->role, ['engineer', 'workshop_engineer']) 
+                            && stripos($u->base_city ?? '', 'karachi') === false 
+                            && stripos($u->base_city ?? '', 'lahore') === false 
+                            && !empty($u->base_city);
+                    });
+                @endphp
+                <select name="workshop_incharge_id" id="workshopReceiveInchargeId" required class="w-full border border-slate-300 rounded-xl p-2.5 text-xs focus:ring-2 focus:ring-purple-500 focus:outline-none bg-white">
+                    <optgroup label="Workshop Incharges &amp; Operations Staff">
+                        @foreach($inchargeUsers as $inc)
+                            <option value="{{ $inc->id }}" data-city="{{ strtolower($inc->base_city ?? '') }}">
+                                {{ $inc->name }} ({{ ucfirst(str_replace('_', ' ', $inc->role)) }} - {{ $inc->base_city ?? 'Lahore' }})
+                            </option>
+                        @endforeach
+                    </optgroup>
+                    <optgroup label="Karachi Technical Team &amp; Bench Engineers">
+                        @foreach($karachiEngineers as $eng)
+                            <option value="{{ $eng->id }}" data-city="karachi">
+                                {{ $eng->name }} (Bench Engineer - Karachi)
+                            </option>
+                        @endforeach
+                    </optgroup>
+                    <optgroup label="Lahore Technical Team &amp; Bench Engineers">
+                        @foreach($lahoreEngineers as $eng)
+                            <option value="{{ $eng->id }}" data-city="lahore">
+                                {{ $eng->name }} (Bench Engineer - Lahore)
+                            </option>
+                        @endforeach
+                    </optgroup>
+                    @if($otherEngineers->isNotEmpty())
+                    <optgroup label="Regional Engineers">
+                        @foreach($otherEngineers as $eng)
+                            <option value="{{ $eng->id }}" data-city="{{ strtolower($eng->base_city ?? '') }}">
+                                {{ $eng->name }} (Engineer - {{ $eng->base_city }})
+                            </option>
+                        @endforeach
+                    </optgroup>
+                    @endif
+                </select>
+                <p class="text-[11px] text-purple-600 mt-1" id="workshopInchargeHelpText">Machine will be handed over to the selected handler for intake &amp; bench diagnosis.</p>
             </div>
             <div>
                 <label class="block font-bold text-slate-700 mb-1">
@@ -267,15 +306,76 @@
 </div>
 
 <script>
-function openWorkshopReceiveModal(ticketId, ticketNo, bankName, location) {
+function openWorkshopReceiveModal(ticketId, ticketNo, bankName, location, branchCity, engineerCity) {
     const form = document.getElementById('workshopReceiveForm');
     if (form) form.action = '/tickets/' + ticketId + '/workshop-receive';
     const badge = document.getElementById('receiveModalTicketBadge');
     if (badge) badge.innerText = '#' + ticketNo + ' • ' + (bankName || 'Bank');
+
+    // Auto-detect & set Workshop Facility
+    const locSelect = document.getElementById('workshopReceiveLocation');
+    if (locSelect) {
+        const targetCity = (location || branchCity || engineerCity || '').toLowerCase();
+        if (targetCity.includes('karachi')) {
+            locSelect.value = 'Karachi Hub Workshop';
+        } else if (targetCity.includes('islamabad') || targetCity.includes('rawalpindi') || targetCity.includes('peshawar')) {
+            locSelect.value = 'Islamabad Regional Workshop';
+        } else if (targetCity.includes('multan')) {
+            locSelect.value = 'Multan Service Center';
+        } else if (location && location.trim() !== '') {
+            let matched = false;
+            for (let opt of locSelect.options) {
+                if (opt.value.toLowerCase().includes(location.toLowerCase()) || location.toLowerCase().includes(opt.value.toLowerCase())) {
+                    opt.selected = true;
+                    matched = true;
+                    break;
+                }
+            }
+            if (!matched) {
+                locSelect.value = 'Lahore Central Workshop';
+            }
+        } else {
+            locSelect.value = 'Lahore Central Workshop';
+        }
+        updateInchargeOptionsForLocation(locSelect.value);
+    }
+
     const modal = document.getElementById('workshopReceiveModal');
     if (modal) {
         modal.style.display = 'flex';
         modal.classList.remove('hidden');
+    }
+}
+
+function onWorkshopLocationChanged(location) {
+    updateInchargeOptionsForLocation(location);
+}
+
+function updateInchargeOptionsForLocation(location) {
+    const inchargeSelect = document.getElementById('workshopReceiveInchargeId');
+    const helpText = document.getElementById('workshopInchargeHelpText');
+    if (!inchargeSelect) return;
+    const locLower = (location || '').toLowerCase();
+    const isKarachi = locLower.includes('karachi');
+
+    if (isKarachi) {
+        if (helpText) helpText.innerText = 'Karachi Hub Workshop selected: Handover to a Karachi bench technician (e.g. Shariq, Zahid, Raghib, Ronald).';
+        for (let opt of inchargeSelect.options) {
+            const city = (opt.getAttribute('data-city') || '').toLowerCase();
+            const text = opt.text.toLowerCase();
+            if (city.includes('karachi') || text.includes('karachi')) {
+                opt.selected = true;
+                break;
+            }
+        }
+    } else {
+        if (helpText) helpText.innerText = 'Lahore Central Workshop selected: Handover to Incharge (Ikram) or a Lahore bench technician.';
+        for (let opt of inchargeSelect.options) {
+            if (opt.text.toLowerCase().includes('ikram')) {
+                opt.selected = true;
+                break;
+            }
+        }
     }
 }
 

@@ -144,31 +144,35 @@ class WorkshopController extends Controller
         $receivedAt = now();
         $transitDuration = $ticket->inbound_transit_duration_text;
 
+        $isBenchEngineer = in_array($incharge->role, ['engineer', 'workshop_engineer']);
+
         $ticket->update([
             'status'                  => 'in_workshop_repair',
             'workshop_location'       => $location,
             'workshop_received_at'    => $receivedAt,
             'workshop_received_by_id' => Auth::id(),
             'workshop_incharge_id'    => $incharge->id,
-            // Ticket temporarily held by Workshop Incharge until realigned to bench engineer
+            'workshop_engineer_id'    => $isBenchEngineer ? $incharge->id : $ticket->workshop_engineer_id,
             'assigned_engineer_id'    => $incharge->id,
             'workshop_intake_remarks' => $request->workshop_intake_remarks,
         ]);
 
-        // Notification & WhatsApp alert to Workshop Incharge (Ikram)
+        // Notification & WhatsApp alert to Workshop Incharge / Assignee
         \App\Services\NotificationService::notifyWorkshopReceived($ticket, $incharge);
         try {
             $whatsapp->sendWorkshopAlert($ticket, $location, $incharge);
         } catch (\Throwable $e) {}
 
+        $handlerLabel = $isBenchEngineer ? "Bench Engineer {$incharge->name}" : "Workshop Incharge {$incharge->name}";
+
         TicketLog::create([
             'ticket_id' => $ticket->id,
             'user_id'   => Auth::id(),
             'action'    => 'workshop_received',
-            'notes'     => "Machine physically received at {$location} by " . Auth::user()->name . ". Handover complete: Assigned to Workshop Incharge {$incharge->name}. (Inbound Cargo Transit Time: {$transitDuration}). Inspection Remarks: {$request->workshop_intake_remarks}",
+            'notes'     => "Machine physically received at {$location} by " . Auth::user()->name . ". Handover complete: Assigned to {$handlerLabel}. (Inbound Cargo Transit Time: {$transitDuration}). Inspection Remarks: {$request->workshop_intake_remarks}",
         ]);
 
-        return back()->with('success', "Machine received at workshop! Ticket handed over to Workshop Incharge {$incharge->name}.");
+        return back()->with('success', "Machine received at {$location}! Ticket handed over to {$incharge->name}.");
     }
 
     /**
