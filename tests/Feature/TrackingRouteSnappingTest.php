@@ -134,7 +134,9 @@ class TrackingRouteSnappingTest extends TestCase
         $response->assertStatus(200);
         $response->assertSee('leaflet-polylinedecorator');
         $response->assertSee('road_snap_badge');
-        $response->assertSee('applyDirectionDecorator');
+        $response->assertSee('selected_trip_banner');
+        $response->assertSee('0.5x');
+        $response->assertSee('renderStopMarkers');
         $response->assertSee('snapped-route');
     }
 }

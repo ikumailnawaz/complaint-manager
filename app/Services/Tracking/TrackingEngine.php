@@ -193,7 +193,7 @@ class TrackingEngine
     {
         $settings = TrackingSetting::allSettings();
         $stopRadiusM = (float)($settings['stop_radius_m'] ?? 80);
-        $stopMinSec = ((int)($settings['stop_min_minutes'] ?? 5)) * 60;
+        $stopMinSec = max(120, ((int)($settings['stop_min_minutes'] ?? 2)) * 60);
         $stopExitRadiusM = (float)($settings['stop_exit_radius_m'] ?? 150);
         $maxAccuracyM = (float)($settings['max_accuracy_m'] ?? 50);
 

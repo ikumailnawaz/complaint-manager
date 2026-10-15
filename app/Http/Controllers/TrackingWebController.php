@@ -219,22 +219,49 @@ class TrackingWebController extends Controller
             ->orderBy('started_at', 'asc')
             ->get();
 
-        $rawPoints = LocationPoint::where('user_id', $engineer->id)
+        $rawPointsQuery = LocationPoint::where('user_id', $engineer->id)
             ->whereBetween('recorded_at', [
                 Carbon::parse($date)->startOfDay(),
                 Carbon::parse($date)->endOfDay()
             ])
             ->orderBy('recorded_at', 'asc')
-            ->get(['lat', 'lng', 'speed', 'recorded_at', 'accuracy', 'battery'])
-            ->map(function ($p) {
-                return [
-                    'lat'   => (float)$p->lat,
-                    'lng'   => (float)$p->lng,
-                    'speed' => $p->speed ? round($p->speed * 3.6, 1) : 0,
-                    'time'  => Carbon::parse($p->recorded_at)->format('H:i:s'),
-                    'time_full' => Carbon::parse($p->recorded_at)->format('h:i A'),
-                ];
-            });
+            ->get(['lat', 'lng', 'speed', 'recorded_at', 'accuracy', 'battery']);
+
+        // Auto-process day if segments are missing or if viewing today's live ongoing telemetry
+        if ($rawPointsQuery->isNotEmpty() && ($segments->isEmpty() || $date === Carbon::today()->toDateString())) {
+            $this->engine->processUserDate($engineer->id, $date);
+            $segments = TripSegment::where('user_id', $engineer->id)
+                ->where(function($q) use ($date) {
+                    $q->where('date', $date)->orWhere('date', 'like', $date . '%');
+                })
+                ->orderBy('started_at', 'asc')
+                ->get();
+
+            $summary = TrackingDailySummary::where('user_id', $engineer->id)
+                ->where(function($q) use ($date) {
+                    $q->where('date', $date)->orWhere('date', 'like', $date . '%');
+                })
+                ->orderByDesc('distance_m')
+                ->first();
+        }
+
+        $segments = $segments->map(function ($s) {
+            $s->started_at_formatted = $s->started_at ? Carbon::parse($s->started_at)->format('h:i A') : '';
+            $s->ended_at_formatted = $s->ended_at ? Carbon::parse($s->ended_at)->format('h:i A') : '';
+            $s->duration_minutes = round(($s->duration_sec ?? 0) / 60);
+            return $s;
+        });
+
+        $rawPoints = $rawPointsQuery->map(function ($p) {
+            return [
+                'lat'   => (float)$p->lat,
+                'lng'   => (float)$p->lng,
+                'speed' => $p->speed ? round($p->speed * 3.6, 1) : 0,
+                'time'  => Carbon::parse($p->recorded_at)->format('H:i:s'),
+                'time_full' => Carbon::parse($p->recorded_at)->format('h:i A'),
+                'timestamp' => Carbon::parse($p->recorded_at)->timestamp,
+            ];
+        });
 
         $allEngineers = User::whereIn('role', ['engineer', 'workshop_technician', 'admin'])->orderBy('name')->get();
         $geofences = Geofence::active()->get();
