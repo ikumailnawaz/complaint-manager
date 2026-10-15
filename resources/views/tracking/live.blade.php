@@ -50,7 +50,7 @@
         <!-- Navigation Buttons -->
         <div class="flex items-center space-x-2">
             <span id="poll_indicator" class="text-[11px] text-slate-400 font-mono hidden sm:inline">
-                Auto-refresh in <span id="countdown">15</span>s
+                Auto-refresh in <span id="countdown">10</span>s
             </span>
             <button onclick="fetchLiveData()" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition flex items-center space-x-1.5">
                 <i class="fa-solid fa-arrows-rotate text-[11px]" id="refresh_icon"></i>
@@ -123,6 +123,12 @@
     </div>
 </div>
 
+<style>
+.custom-fleet-pin {
+    transition: transform 1.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+</style>
+
 <script>
 let map;
 let markers = {};
@@ -131,7 +137,7 @@ let geofenceCircles = [];
 let bankMarkers = [];
 let engineersData = [];
 let bankBranches = @json($bankBranches ?? []);
-let countdown = 15;
+let countdown = 10;
 let timer;
 
 const defaultLat = 31.5397357;
@@ -229,7 +235,7 @@ function fetchLiveData() {
                 renderFleetList(engineersData);
                 updateMapMarkers(engineersData);
                 updateStats(engineersData);
-                countdown = 15;
+                countdown = 10;
             }
         })
         .catch(err => {
