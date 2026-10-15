@@ -50,7 +50,7 @@
         <!-- Navigation Buttons -->
         <div class="flex items-center space-x-2">
             <span id="poll_indicator" class="text-[11px] text-slate-400 font-mono hidden sm:inline">
-                Auto-refresh in <span id="countdown">10</span>s
+                Auto-refresh in <span id="countdown">4</span>s
             </span>
             <button onclick="fetchLiveData()" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition flex items-center space-x-1.5">
                 <i class="fa-solid fa-arrows-rotate text-[11px]" id="refresh_icon"></i>
@@ -130,6 +130,7 @@
 </style>
 
 <script>
+const REFRESH_INTERVAL_SEC = 4;
 let map;
 let markers = {};
 let accuracyCircles = {};
@@ -137,8 +138,67 @@ let geofenceCircles = [];
 let bankMarkers = [];
 let engineersData = [];
 let bankBranches = @json($bankBranches ?? []);
-let countdown = 10;
+let countdown = REFRESH_INTERVAL_SEC;
 let timer;
+let markerAnimations = {};
+
+function getDistanceM(lat1, lon1, lat2, lon2) {
+    const R = 6371000;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function smoothlyMoveMarker(marker, targetLat, targetLng, engineerId) {
+    const startLatLng = marker.getLatLng();
+    const startLat = startLatLng.lat;
+    const startLng = startLatLng.lng;
+
+    const distM = getDistanceM(startLat, startLng, targetLat, targetLng);
+    if (distM < 0.2) return;
+
+    if (distM > 4000) {
+        marker.setLatLng([targetLat, targetLng]);
+        if (accuracyCircles[engineerId]) {
+            accuracyCircles[engineerId].setLatLng([targetLat, targetLng]);
+        }
+        return;
+    }
+
+    if (markerAnimations[engineerId]) {
+        cancelAnimationFrame(markerAnimations[engineerId]);
+        delete markerAnimations[engineerId];
+    }
+
+    const durationMs = 3400; // 3.4 seconds smooth glide for 4s polling
+    const startTime = performance.now();
+
+    function step(currentTime) {
+        const elapsed = currentTime - startTime;
+        const progress = Math.min(elapsed / durationMs, 1.0);
+        // Smooth cubic ease-out
+        const ease = 1 - Math.pow(1 - progress, 3);
+
+        const currentLat = startLat + (targetLat - startLat) * ease;
+        const currentLng = startLng + (targetLng - startLng) * ease;
+
+        marker.setLatLng([currentLat, currentLng]);
+        if (accuracyCircles[engineerId]) {
+            accuracyCircles[engineerId].setLatLng([currentLat, currentLng]);
+        }
+
+        if (progress < 1.0) {
+            markerAnimations[engineerId] = requestAnimationFrame(step);
+        } else {
+            delete markerAnimations[engineerId];
+        }
+    }
+
+    markerAnimations[engineerId] = requestAnimationFrame(step);
+}
 
 const defaultLat = 31.5397357;
 const defaultLng = 74.3306892;
@@ -235,7 +295,7 @@ function fetchLiveData() {
                 renderFleetList(engineersData);
                 updateMapMarkers(engineersData);
                 updateStats(engineersData);
-                countdown = 10;
+                countdown = REFRESH_INTERVAL_SEC;
             }
         })
         .catch(err => {
@@ -388,7 +448,7 @@ function updateMapMarkers(engineers) {
         `;
 
         if (markers[e.engineer_id]) {
-            markers[e.engineer_id].setLatLng([e.lat, e.lng]);
+            smoothlyMoveMarker(markers[e.engineer_id], e.lat, e.lng, e.engineer_id);
             markers[e.engineer_id].setIcon(customIcon);
             markers[e.engineer_id].setPopupContent(popupContent);
         } else {
@@ -401,7 +461,6 @@ function updateMapMarkers(engineers) {
         if (e.accuracy && e.accuracy > 0 && e.accuracy <= 250) {
             const circleColor = e.is_stale ? '#f59e0b' : '#0ea5e9';
             if (accuracyCircles[e.engineer_id]) {
-                accuracyCircles[e.engineer_id].setLatLng([e.lat, e.lng]);
                 accuracyCircles[e.engineer_id].setRadius(e.accuracy);
                 accuracyCircles[e.engineer_id].setStyle({ color: circleColor, fillColor: circleColor });
             } else {
@@ -423,6 +482,10 @@ function updateMapMarkers(engineers) {
     // Remove old markers and accuracy circles
     for (const id in markers) {
         if (!seen[id]) {
+            if (markerAnimations[id]) {
+                cancelAnimationFrame(markerAnimations[id]);
+                delete markerAnimations[id];
+            }
             map.removeLayer(markers[id]);
             delete markers[id];
             if (accuracyCircles[id]) {
