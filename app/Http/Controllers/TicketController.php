@@ -77,6 +77,19 @@ class TicketController extends Controller
             $query->where('branch_location', 'like', "%{$request->location}%");
         }
 
+        // Date Range Filters
+        if ($request->filled('from_date')) {
+            $query->whereDate('created_at', '>=', $request->from_date);
+        } elseif ($request->filled('from')) {
+            $query->whereDate('created_at', '>=', $request->from);
+        }
+
+        if ($request->filled('to_date')) {
+            $query->whereDate('created_at', '<=', $request->to_date);
+        } elseif ($request->filled('to')) {
+            $query->whereDate('created_at', '<=', $request->to);
+        }
+
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
@@ -149,6 +162,19 @@ class TicketController extends Controller
 
         if ($request->filled('unassigned')) {
             $query->whereNull('assigned_engineer_id');
+        }
+
+        // Date Range Filters
+        if ($request->filled('from_date')) {
+            $query->whereDate('created_at', '>=', $request->from_date);
+        } elseif ($request->filled('from')) {
+            $query->whereDate('created_at', '>=', $request->from);
+        }
+
+        if ($request->filled('to_date')) {
+            $query->whereDate('created_at', '<=', $request->to_date);
+        } elseif ($request->filled('to')) {
+            $query->whereDate('created_at', '<=', $request->to);
         }
 
         if ($request->filled('search')) {

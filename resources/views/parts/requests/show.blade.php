@@ -273,6 +273,12 @@
                        class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-sky-600 hover:bg-sky-700 text-white rounded-lg text-xs font-semibold shadow-xs transition">
                         <i class="fas fa-download"></i> Download Video
                     </a>
+                    @if(!in_array($partRequest->status, ['approved', 'dispatched']) && (auth()->user()->isOfficeStaff() || auth()->user()->isSuperior() || (auth()->user()->isEngineer() && auth()->id() === $partRequest->engineer_id)))
+                        <button type="button" onclick="openUpdateVideoModal()"
+                                class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-semibold shadow-xs transition">
+                            <i class="fas fa-arrows-rotate"></i> Update Video
+                        </button>
+                    @endif
                 </div>
             </div>
             <div class="max-w-2xl bg-black rounded-lg overflow-hidden shadow">
@@ -283,8 +289,25 @@
             </div>
             <div class="mt-2 text-[11px] text-slate-500 flex items-center justify-between">
                 <span>Stored File: <span class="font-mono text-slate-700">{{ basename($partRequest->fault_video_path) }}</span></span>
-                <span class="text-slate-400">Uploaded during stock verification</span>
+                @if(!in_array($partRequest->status, ['approved', 'dispatched']))
+                    <span class="text-amber-600 font-medium"><i class="fas fa-circle-info mr-1"></i>Wrong video? You can update/replace this video until Super Admin approves.</span>
+                @else
+                    <span class="text-slate-400">Uploaded during stock verification</span>
+                @endif
             </div>
+        </div>
+    @elseif(!in_array($partRequest->status, ['approved', 'dispatched']) && (auth()->user()->isOfficeStaff() || auth()->user()->isSuperior()))
+        <div class="bg-slate-50 rounded-xl border border-dashed border-slate-300 p-4 mb-5 flex items-center justify-between">
+            <div>
+                <h4 class="font-bold text-xs text-slate-700 flex items-center gap-2">
+                    <i class="fas fa-video text-slate-400"></i> Fault Video Evidence
+                </h4>
+                <p class="text-[11px] text-slate-500 mt-0.5">No video evidence attached yet. You can attach diagnostic video before Super Admin approval.</p>
+            </div>
+            <button type="button" onclick="openUpdateVideoModal()"
+                    class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-sky-600 hover:bg-sky-700 text-white rounded-lg text-xs font-semibold shadow-xs transition">
+                <i class="fas fa-upload"></i> Upload Video
+            </button>
         </div>
     @endif
 
@@ -293,8 +316,11 @@
         <div class="bg-rose-50 border border-rose-200 rounded-xl p-4 mb-5">
             <div class="flex items-start gap-3">
                 <i class="fas fa-ban text-rose-500 mt-0.5"></i>
-                <div>
-                    <strong class="text-rose-700 text-sm">Request Rejected</strong>
+                <div class="flex-1">
+                    <div class="flex items-center justify-between">
+                        <strong class="text-rose-700 text-sm">Request Rejected</strong>
+                        <span class="px-2 py-0.5 bg-rose-100 text-rose-800 text-[10px] font-bold rounded-full uppercase tracking-wider">Super Admin Rejected</span>
+                    </div>
                     <p class="text-xs text-rose-600 mt-1">
                         By <strong>{{ $partRequest->rejectedBy?->name ?? 'Unknown' }}</strong>
                         on {{ $partRequest->rejected_at?->format('d M Y H:i') ?? '—' }}
@@ -305,6 +331,71 @@
                 </div>
             </div>
         </div>
+
+        {{-- Office Staff / Superior: Re-upload & Resubmit Section --}}
+        @if(auth()->user()->isOfficeStaff() || auth()->user()->isSuperior())
+            <div class="bg-white rounded-xl shadow-xs border-2 border-amber-300 p-6 mb-5">
+                <div class="flex items-start justify-between mb-4">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center text-lg flex-shrink-0">
+                            <i class="fas fa-cloud-arrow-up"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-bold text-slate-800 text-sm">
+                                Re-upload Evidence &amp; Resubmit to Super Admin
+                            </h3>
+                            <p class="text-xs text-slate-500 mt-0.5">
+                                This part request was rejected. Office staff can upload corrected video evidence, address the rejection reason in remarks, and resubmit for Super Admin approval.
+                            </p>
+                        </div>
+                    </div>
+                    <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-800">
+                        <i class="fas fa-redo"></i> Reupload Allowed
+                    </span>
+                </div>
+
+                <form method="POST" action="{{ route('parts.requests.reupload', $partRequest) }}" enctype="multipart/form-data" class="space-y-4">
+                    @csrf
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 mb-1">
+                            New / Corrected Fault Video (MP4, MOV, AVI, WEBM, MKV - Max 100MB)
+                        </label>
+                        <input type="file" name="fault_video" accept="video/*"
+                               class="block w-full text-xs border border-slate-300 rounded-lg px-3 py-2 file:mr-3 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:bg-amber-50 file:text-amber-700 hover:file:bg-amber-100">
+                        @if($partRequest->fault_video_path)
+                            <p class="text-[11px] text-slate-500 mt-1">
+                                Currently attached file: <span class="font-mono text-slate-700">{{ basename($partRequest->fault_video_path) }}</span>. Leave empty if you wish to retain the existing video.
+                            </p>
+                        @endif
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 mb-1">
+                            Response to Rejection / Resubmission Remarks <span class="text-rose-500">*</span>
+                        </label>
+                        <textarea name="resubmit_note" rows="3" required
+                                  class="w-full text-xs border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-amber-400 focus:outline-none"
+                                  placeholder="Address the Super Admin's rejection reason (e.g. 'Replaced with proper clip showing worn feed rollers; verified parts are in Lahore store')..."></textarea>
+                    </div>
+
+                    <div class="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-100">
+                        <div class="flex items-center gap-3">
+                            <button type="submit"
+                                    class="inline-flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white px-5 py-2.5 rounded-lg text-xs font-bold shadow-xs transition">
+                                <i class="fas fa-paper-plane"></i> Re-upload &amp; Resubmit to Super Admin
+                            </button>
+                            <span class="text-xs text-slate-400">Moves status back to Pending Approval</span>
+                        </div>
+                        @if($partRequest->isEditable())
+                            <a href="{{ route('parts.requests.edit', $partRequest) }}"
+                               class="text-xs text-slate-500 hover:text-amber-700 inline-flex items-center gap-1 font-medium">
+                                <i class="fas fa-edit"></i> Edit Request Parts/Qtys first
+                            </a>
+                        @endif
+                    </div>
+                </form>
+            </div>
+        @endif
     @endif
 
     {{-- Dispatch Info & Faulty Part Return Tracker --}}
@@ -492,15 +583,23 @@
     {{-- Office Staff Info Notice when awaiting Super Admin Approval --}}
     @if(auth()->user()->isOfficeStaff() && $partRequest->status === 'pending_approval')
         <div class="bg-amber-50 border border-amber-200 rounded-xl p-5 mt-4">
-            <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center flex-shrink-0">
-                    <i class="fas fa-clock text-lg"></i>
+            <div class="flex flex-wrap items-center justify-between gap-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center flex-shrink-0">
+                        <i class="fas fa-clock text-lg"></i>
+                    </div>
+                    <div>
+                        <h4 class="font-bold text-amber-900 text-sm">Stage 1 Verified &mdash; Awaiting Stage 2 Super Admin Approval</h4>
+                        <p class="text-xs text-amber-700 mt-0.5">
+                            Stock verification was completed by Office Staff. This request is now pending final authorization by the Super Administrator before parts can be dispatched.
+                        </p>
+                    </div>
                 </div>
                 <div>
-                    <h4 class="font-bold text-amber-900 text-sm">Stage 1 Verified &mdash; Awaiting Stage 2 Super Admin Approval</h4>
-                    <p class="text-xs text-amber-700 mt-0.5">
-                        Stock verification was completed by Office Staff. This request is now pending final authorization by the Super Administrator before parts can be dispatched.
-                    </p>
+                    <button type="button" onclick="openUpdateVideoModal()"
+                            class="inline-flex items-center gap-1.5 px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-semibold shadow-xs transition">
+                        <i class="fas fa-arrows-rotate"></i> Update Video
+                    </button>
                 </div>
             </div>
         </div>
@@ -889,6 +988,71 @@ function updateSplitWarehouse(itemId, total) {
 
     whSpan.textContent = Math.max(0, total - envVal);
 }
+
+function openUpdateVideoModal() {
+    const modal = document.getElementById('updateVideoModal');
+    if (modal) {
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+    }
+}
+
+function closeUpdateVideoModal() {
+    const modal = document.getElementById('updateVideoModal');
+    if (modal) {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+    }
+}
 </script>
 @endpush
+
+{{-- Update Video Modal --}}
+@if(!in_array($partRequest->status, ['approved', 'dispatched']) && (auth()->user()->isOfficeStaff() || auth()->user()->isSuperior() || (auth()->user()->isEngineer() && auth()->id() === $partRequest->engineer_id)))
+<div id="updateVideoModal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs hidden items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200">
+        <div class="flex items-center justify-between mb-4">
+            <h4 class="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <i class="fas fa-video text-amber-500"></i> Update Fault Diagnostic Video
+            </h4>
+            <button type="button" onclick="closeUpdateVideoModal()" class="text-slate-400 hover:text-slate-600 transition">
+                <i class="fas fa-xmark text-lg"></i>
+            </button>
+        </div>
+
+        <p class="text-xs text-slate-600 mb-4">
+            If an incorrect video was uploaded, you can replace it with the correct file. You can update this video at any time until Super Admin approves the request.
+        </p>
+
+        <form method="POST" action="{{ route('parts.requests.video.update', $partRequest) }}" enctype="multipart/form-data" class="space-y-4">
+            @csrf
+            <div>
+                <label class="block text-xs font-semibold text-slate-700 mb-1">
+                    Select New Video File (MP4, MOV, AVI, WEBM, MKV - Max 100MB) <span class="text-rose-500">*</span>
+                </label>
+                <input type="file" name="fault_video" accept="video/*" required
+                       class="block w-full text-xs border border-slate-300 rounded-lg px-3 py-2 file:mr-3 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:bg-amber-50 file:text-amber-700 hover:file:bg-amber-100">
+            </div>
+
+            @if($partRequest->fault_video_path)
+                <div class="text-[11px] text-slate-500 bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+                    <span class="font-medium text-slate-700">Current Video:</span> <span class="font-mono">{{ basename($partRequest->fault_video_path) }}</span>
+                    <span class="block text-amber-600 mt-0.5">Uploading will overwrite and replace this video file.</span>
+                </div>
+            @endif
+
+            <div class="flex gap-2 justify-end pt-2">
+                <button type="button" onclick="closeUpdateVideoModal()"
+                        class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition">
+                    Cancel
+                </button>
+                <button type="submit"
+                        class="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition shadow-xs flex items-center gap-1.5">
+                    <i class="fas fa-cloud-arrow-up"></i> Upload &amp; Replace Video
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+@endif
 @endsection

@@ -609,12 +609,92 @@ class PartRequestController extends Controller
     }
 
     /**
+     * Re-upload evidence & resubmit a rejected part request for Super Admin approval.
+     */
+    public function reupload(Request $request, PartRequest $partRequest)
+    {
+        $user = auth()->user();
+        abort_unless($user->isOfficeStaff() || $user->isSuperior(), 403, 'Re-uploading and resubmitting requires Office Staff or Administrator access.');
+
+        if ($partRequest->status !== 'rejected') {
+            return back()->with('error', 'Only rejected part requests can be re-uploaded and resubmitted.');
+        }
+
+        $data = $request->validate([
+            'fault_video'   => 'nullable|file|mimes:mp4,mov,avi,wmv,webm,mkv|max:102400',
+            'resubmit_note' => 'required|string|max:1000',
+        ]);
+
+        $videoPath = $partRequest->fault_video_path;
+        if ($request->hasFile('fault_video')) {
+            $videoPath = $request->file('fault_video')->store('part-requests/videos', 'public');
+
+            try {
+                $sourcePath = Storage::disk('public')->path($videoPath);
+                $publicTarget = public_path('storage/' . $videoPath);
+                if (!file_exists(dirname($publicTarget))) {
+                    @mkdir(dirname($publicTarget), 0777, true);
+                }
+                @copy($sourcePath, $publicTarget);
+            } catch (\Throwable $e) {}
+
+            // Delete old video if replaced
+            if ($partRequest->fault_video_path && $partRequest->fault_video_path !== $videoPath) {
+                try {
+                    Storage::disk('public')->delete($partRequest->fault_video_path);
+                    $oldPublic = public_path('storage/' . $partRequest->fault_video_path);
+                    if (file_exists($oldPublic)) {
+                        @unlink($oldPublic);
+                    }
+                } catch (\Throwable $e) {}
+            }
+        }
+
+        $timestamp = now()->format('d M Y H:i');
+        $priorRejection = $partRequest->rejection_reason;
+        $historyNote = "[Re-uploaded & Resubmitted by {$user->name} on {$timestamp}]";
+        if ($priorRejection) {
+            $historyNote .= "\nPrior rejection reason: {$priorRejection}";
+        }
+        $historyNote .= "\nResubmission note: " . trim($data['resubmit_note']);
+
+        $updatedRemarks = $partRequest->stock_remarks
+            ? ($partRequest->stock_remarks . "\n\n" . $historyNote)
+            : $historyNote;
+
+        $partRequest->update([
+            'status'               => 'pending_approval',
+            'fault_video_path'     => $videoPath,
+            'stock_verified_by_id' => $user->id,
+            'stock_verified_at'    => now(),
+            'stock_remarks'        => $updatedRemarks,
+            'rejected_by_id'       => null,
+            'rejected_at'          => null,
+            'rejection_reason'     => null,
+        ]);
+
+        // Notify Super Admin of resubmission awaiting approval
+        try {
+            \App\Services\NotificationService::notifyPartRequestVerified($partRequest);
+        } catch (\Throwable $e) {}
+
+        return redirect()->route('parts.requests.show', $partRequest)
+            ->with('success', 'Part request ' . $partRequest->request_number . ' has been re-uploaded and resubmitted to Super Admin for approval.');
+    }
+
+    /**
      * Edit / Replace fault video for a part request and update record.
+     * Allowed for Office Staff, Superiors, and assigned Engineer until Super Admin approval.
      */
     public function updateVideo(Request $request, PartRequest $partRequest)
     {
         $user = auth()->user();
-        if ($user->isEngineer() && $partRequest->engineer_id !== $user->id) {
+
+        if (in_array($partRequest->status, ['approved', 'dispatched'])) {
+            return back()->with('error', 'Cannot update video once part request has been approved or dispatched.');
+        }
+
+        if (!($user->isOfficeStaff() || $user->isSuperior() || ($user->isEngineer() && $partRequest->engineer_id === $user->id))) {
             abort(403, 'Unauthorized to update video for this part request.');
         }
 
@@ -637,6 +717,10 @@ class PartRequestController extends Controller
         if ($partRequest->fault_video_path && $partRequest->fault_video_path !== $videoPath) {
             try {
                 Storage::disk('public')->delete($partRequest->fault_video_path);
+                $oldPublic = public_path('storage/' . $partRequest->fault_video_path);
+                if (file_exists($oldPublic)) {
+                    @unlink($oldPublic);
+                }
             } catch (\Throwable $e) {}
         }
 

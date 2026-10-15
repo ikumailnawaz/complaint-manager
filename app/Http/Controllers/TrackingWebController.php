@@ -482,16 +482,35 @@ class TrackingWebController extends Controller
     public function attendance(Request $request)
     {
         $selectedEngineerId = $request->query('engineer_id');
-        $selectedMonth = $request->query('month', Carbon::today()->format('Y-m'));
+
+        $fromDate = $request->query('from_date', $request->query('from'));
+        $toDate = $request->query('to_date', $request->query('to'));
+
+        if (!$fromDate && !$toDate && $request->filled('month')) {
+            $selectedMonth = $request->query('month');
+            $fromDate = Carbon::parse($selectedMonth . '-01')->startOfMonth()->toDateString();
+            $toDate = Carbon::parse($selectedMonth . '-01')->endOfMonth()->toDateString();
+        } else {
+            if (!$fromDate) {
+                $fromDate = Carbon::today()->startOfMonth()->toDateString();
+            }
+            if (!$toDate) {
+                $toDate = Carbon::today()->toDateString();
+            }
+            $selectedMonth = Carbon::parse($fromDate)->format('Y-m');
+        }
 
         $engineers = User::whereIn('role', ['engineer', 'workshop_technician', 'admin'])->orderBy('name')->get();
 
-        $monthStart = Carbon::parse($selectedMonth . '-01')->startOfMonth()->toDateString();
-        $monthEnd = Carbon::parse($selectedMonth . '-01')->endOfMonth()->toDateString();
-
         $query = AttendanceDay::with(['engineer', 'geofence', 'overriddenBy'])
-            ->whereBetween('date', [$monthStart, $monthEnd])
             ->orderBy('date', 'desc');
+
+        if ($fromDate) {
+            $query->whereDate('date', '>=', $fromDate);
+        }
+        if ($toDate) {
+            $query->whereDate('date', '<=', $toDate);
+        }
 
         if ($selectedEngineerId) {
             $query->where('user_id', $selectedEngineerId);
@@ -499,7 +518,7 @@ class TrackingWebController extends Controller
 
         $attendanceDays = $query->get();
 
-        return view('tracking.attendance', compact('engineers', 'selectedEngineerId', 'selectedMonth', 'attendanceDays'));
+        return view('tracking.attendance', compact('engineers', 'selectedEngineerId', 'selectedMonth', 'fromDate', 'toDate', 'attendanceDays'));
     }
 
     /**

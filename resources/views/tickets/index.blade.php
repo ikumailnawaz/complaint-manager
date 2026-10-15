@@ -124,31 +124,70 @@
 
                 </div>
 
-                <!-- Action Buttons & Quick Filter Chips -->
-                <div class="flex flex-wrap items-center justify-between gap-2 pt-1 text-xs">
-                    <div class="flex items-center space-x-2">
-                        <a href="{{ route('tickets.index', ['unassigned' => 1, 'per_page' => request('per_page', 25)]) }}" class="px-2.5 py-1 rounded-lg border {{ request('unassigned') ? 'bg-amber-100 border-amber-400 text-amber-900 font-bold' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100' }} transition">
-                            <i class="fa-solid fa-user-xmark mr-1 text-amber-600"></i> Unassigned Only
-                        </a>
-                        <a href="{{ route('tickets.index', ['status' => 'escalated', 'per_page' => request('per_page', 25)]) }}" class="px-2.5 py-1 rounded-lg border {{ request('status') === 'escalated' ? 'bg-rose-100 border-rose-400 text-rose-900 font-bold' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100' }} transition">
-                            <i class="fa-solid fa-fire mr-1 text-rose-600"></i> Escalated Only
-                        </a>
-                        <a href="{{ route('tickets.index', ['status' => 'in_progress', 'per_page' => request('per_page', 25)]) }}" class="px-2.5 py-1 rounded-lg border {{ request('status') === 'in_progress' ? 'bg-indigo-100 border-indigo-400 text-indigo-900 font-bold' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100' }} transition">
-                            <i class="fa-solid fa-wrench mr-1 text-indigo-600"></i> Active On-Site
-                        </a>
-                        <a href="{{ route('tickets.index', ['status' => 'awaiting_approval', 'per_page' => request('per_page', 25)]) }}" class="px-2.5 py-1 rounded-lg border {{ request('status') === 'awaiting_approval' ? 'bg-amber-100 border-amber-400 text-amber-900 font-bold' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100' }} transition">
-                            <i class="fa-solid fa-hourglass-half mr-1 text-amber-600"></i> Awaiting Approval
-                        </a>
+                <!-- Row 2: Date From - To + Bank + Filter Actions -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 text-xs pt-2 border-t border-slate-200/60">
+                    <!-- From Date (3 cols) -->
+                    <div class="lg:col-span-3">
+                        <label class="block font-semibold text-slate-700 mb-1">
+                            <i class="fa-solid fa-calendar-day mr-1 text-slate-400"></i> From Date
+                        </label>
+                        <input type="date" name="from_date" value="{{ request('from_date', request('from')) }}" 
+                               class="w-full bg-white border border-slate-300 rounded-xl py-2 px-2.5 text-xs focus:ring-2 focus:ring-sky-500">
                     </div>
 
-                    <div class="flex items-center space-x-2">
-                        <button type="submit" class="px-4 py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-xs transition flex items-center space-x-1.5">
+                    <!-- To Date (3 cols) -->
+                    <div class="lg:col-span-3">
+                        <label class="block font-semibold text-slate-700 mb-1">
+                            <i class="fa-solid fa-calendar-day mr-1 text-slate-400"></i> To Date
+                        </label>
+                        <input type="date" name="to_date" value="{{ request('to_date', request('to')) }}" 
+                               class="w-full bg-white border border-slate-300 rounded-xl py-2 px-2.5 text-xs focus:ring-2 focus:ring-sky-500">
+                    </div>
+
+                    <!-- Bank Name (3 cols) -->
+                    <div class="lg:col-span-3">
+                        <label class="block font-semibold text-slate-700 mb-1">
+                            <i class="fa-solid fa-building-columns mr-1 text-slate-400"></i> Bank Name
+                        </label>
+                        <input type="text" name="bank" value="{{ request('bank') }}" placeholder="e.g. Alfalah, Meezan, HBL..." 
+                               class="w-full bg-white border border-slate-300 rounded-xl py-2 px-2.5 text-xs focus:ring-2 focus:ring-sky-500">
+                    </div>
+
+                    <!-- Submit & Reset Buttons (3 cols) -->
+                    <div class="lg:col-span-3 flex items-end gap-2">
+                        <button type="submit" class="flex-1 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-xs transition flex items-center justify-center space-x-1.5 shadow-xs">
                             <i class="fa-solid fa-filter text-[10px]"></i>
-                            <span>Apply Filters</span>
+                            <span>Filter</span>
                         </button>
-                        <a href="{{ route('tickets.index') }}" class="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-medium rounded-xl text-xs transition" title="Reset Filters">
-                            <i class="fa-solid fa-rotate-left"></i> Reset
+                        <a href="{{ route('tickets.index') }}" class="px-3 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-medium rounded-xl text-xs transition flex items-center justify-center" title="Reset Filters">
+                            <i class="fa-solid fa-rotate-left"></i>
                         </a>
+                    </div>
+                </div>
+
+                <!-- Action Buttons & Quick Filter Chips -->
+                <div class="flex flex-wrap items-center justify-between gap-2 pt-1 text-xs">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <a href="{{ route('tickets.index', array_merge(request()->except('unassigned'), request('unassigned') ? [] : ['unassigned' => 1])) }}" class="px-2.5 py-1 rounded-lg border {{ request('unassigned') ? 'bg-amber-100 border-amber-400 text-amber-900 font-bold' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100' }} transition">
+                            <i class="fa-solid fa-user-xmark mr-1 text-amber-600"></i> Unassigned Only
+                        </a>
+                        <a href="{{ route('tickets.index', array_merge(request()->except('status'), request('status') === 'escalated' ? [] : ['status' => 'escalated'])) }}" class="px-2.5 py-1 rounded-lg border {{ request('status') === 'escalated' ? 'bg-rose-100 border-rose-400 text-rose-900 font-bold' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100' }} transition">
+                            <i class="fa-solid fa-fire mr-1 text-rose-600"></i> Escalated Only
+                        </a>
+                        <a href="{{ route('tickets.index', array_merge(request()->except('status'), request('status') === 'in_progress' ? [] : ['status' => 'in_progress'])) }}" class="px-2.5 py-1 rounded-lg border {{ request('status') === 'in_progress' ? 'bg-indigo-100 border-indigo-400 text-indigo-900 font-bold' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100' }} transition">
+                            <i class="fa-solid fa-wrench mr-1 text-indigo-600"></i> Active On-Site
+                        </a>
+                        <a href="{{ route('tickets.index', array_merge(request()->except('status'), request('status') === 'awaiting_approval' ? [] : ['status' => 'awaiting_approval'])) }}" class="px-2.5 py-1 rounded-lg border {{ request('status') === 'awaiting_approval' ? 'bg-amber-100 border-amber-400 text-amber-900 font-bold' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100' }} transition">
+                            <i class="fa-solid fa-hourglass-half mr-1 text-amber-600"></i> Awaiting Approval
+                        </a>
+
+                        @if(request('from_date') || request('to_date'))
+                            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-sky-50 text-sky-700 border border-sky-200 text-xs font-semibold">
+                                <i class="fa-solid fa-calendar-days text-sky-500"></i>
+                                {{ request('from_date') ? \Carbon\Carbon::parse(request('from_date'))->format('d M Y') : 'Start' }} &rarr; {{ request('to_date') ? \Carbon\Carbon::parse(request('to_date'))->format('d M Y') : 'Now' }}
+                                <a href="{{ route('tickets.index', request()->except(['from_date', 'to_date', 'from', 'to'])) }}" class="text-sky-500 hover:text-sky-800 ml-1 font-bold" title="Clear Date Filter">&times;</a>
+                            </span>
+                        @endif
                     </div>
                 </div>
 

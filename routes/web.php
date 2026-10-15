@@ -153,6 +153,7 @@ Route::middleware('auth')->group(function () {
             Route::get('/{partRequest}/edit', [PartRequestController::class, 'edit'])->name('edit');
             Route::put('/{partRequest}', [PartRequestController::class, 'update'])->name('update');
             Route::post('/{partRequest}/verify-stock', [PartRequestController::class, 'verifyStock'])->name('verify-stock');
+            Route::post('/{partRequest}/reupload', [PartRequestController::class, 'reupload'])->name('reupload');
             Route::post('/{partRequest}/approve', [PartRequestController::class, 'approve'])->name('approve');
             Route::post('/{partRequest}/reject', [PartRequestController::class, 'reject'])->name('reject');
             Route::post('/{partRequest}/dispatch', [PartRequestController::class, 'dispatch'])->name('dispatch');
