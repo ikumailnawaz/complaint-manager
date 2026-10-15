@@ -17,6 +17,7 @@
 @section('content')
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="https://unpkg.com/leaflet-polylinedecorator@1.6.0/dist/leaflet.polylineDecorator.js"></script>
 
 <div class="space-y-4">
     @include('tracking.partials.tabs')
@@ -71,6 +72,12 @@
         <!-- Right: Map Canvas with Interactive Controls -->
         <div class="lg:col-span-3 bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden relative flex flex-col">
             <div id="playback_map" class="w-full flex-1 z-10"></div>
+
+            <!-- Floating Snapped Route & Direction Indicator Pill -->
+            <div id="road_snap_badge" class="absolute top-3 left-14 z-[400] bg-slate-900/90 backdrop-blur-md px-3 py-1.5 rounded-xl shadow-lg border border-slate-700/80 text-xs font-semibold text-white flex items-center space-x-2 pointer-events-none transition-all">
+                <span id="road_snap_dot" class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse"></span>
+                <span id="road_snap_text" class="text-[11px] font-medium text-slate-200">Matching route to street network...</span>
+            </div>
 
             <!-- Floating Uber-Style Playback Control Console -->
             <div class="p-3 bg-slate-900/95 backdrop-blur-md text-white border-t border-slate-800 z-20 flex flex-col space-y-2.5 shadow-2xl">
@@ -173,10 +180,13 @@ let segments = @json($segments);
 let geofences = @json($geofences);
 let bankBranches = @json($bankBranches ?? []);
 
-let polyline;
-let bikeMarker;
+let polyline = null;
+let routeCasing = null;
+let routeDecorator = null;
+let bikeMarker = null;
 let stopMarkers = [];
 
+let activeSimulationPoints = (routePoints && routePoints.length > 0) ? routePoints.slice() : [];
 let currentIndex = 0;
 let isPlaying = false;
 let playInterval = null;
@@ -184,6 +194,11 @@ let speedMultiplier = 1;
 
 document.addEventListener('DOMContentLoaded', function() {
     initPlaybackMap();
+    if (routePoints.length > 1) {
+        loadAndSnapRoute();
+    } else {
+        updateSnapBadge('idle', 'No transit telemetry recorded');
+    }
 });
 
 function initPlaybackMap() {
@@ -230,7 +245,7 @@ function initPlaybackMap() {
         }).addTo(map).bindPopup("<b>" + gf.name + "</b> (Attendance Geofence)");
     });
 
-    // Plot Bank Branches from Active Complaints (Banks similar to Google Maps)
+    // Plot Bank Branches from Active Complaints
     bankBranches.forEach(b => {
         const bankIcon = L.divIcon({
             html: `
@@ -265,16 +280,29 @@ function initPlaybackMap() {
         return;
     }
 
-    // Draw Complete Travel Polyline (Vibrant Indigo Route)
+    // Initial Path (Raw Telemetry) - Immediately render so map isn't blank
     const latlngs = routePoints.map(p => [p.lat, p.lng]);
+
+    routeCasing = L.polyline(latlngs, {
+        color: '#1e1b4b',
+        weight: 8,
+        opacity: 0.35,
+        lineCap: 'round',
+        lineJoin: 'round'
+    }).addTo(map);
+
     polyline = L.polyline(latlngs, {
         color: '#4f46e5',
-        weight: 5,
-        opacity: 0.85,
+        weight: 5.5,
+        opacity: 0.95,
+        lineCap: 'round',
         lineJoin: 'round'
     }).addTo(map);
 
     map.fitBounds(polyline.getBounds(), { padding: [40, 40] });
+
+    // Apply Direction Indicator Arrows on initial path
+    applyDirectionDecorator(polyline);
 
     // Place Stop Markers (A, B, C...) with Duration & Arrival Tags
     let stopIdx = 0;
@@ -317,7 +345,7 @@ function initPlaybackMap() {
 
     // Create Uber/Careem Animated Moving Motorcycle Marker
     const bikeHtml = `
-        <div id="bike_pin" style="transition: transform 0.2s ease-out;" class="w-10 h-10 rounded-full bg-slate-900 text-white flex items-center justify-center shadow-2xl border-2 border-amber-400 text-sm">
+        <div id="bike_pin" style="transition: transform 0.15s ease-out;" class="w-10 h-10 rounded-full bg-slate-950 text-white flex items-center justify-center shadow-2xl border-2 border-amber-400 text-sm">
             <i class="fa-solid fa-motorcycle text-amber-300"></i>
         </div>
     `;
@@ -334,6 +362,213 @@ function initPlaybackMap() {
     updatePlaybackUI(0);
 }
 
+/**
+ * Decorate polyline with crisp, high-visibility directional arrows
+ */
+function applyDirectionDecorator(poly) {
+    if (routeDecorator) {
+        map.removeLayer(routeDecorator);
+        routeDecorator = null;
+    }
+    if (!poly || typeof L.polylineDecorator !== 'function') return;
+
+    try {
+        routeDecorator = L.polylineDecorator(poly, {
+            patterns: [
+                {
+                    offset: 25,
+                    repeat: 70,
+                    symbol: L.Symbol.arrowHead({
+                        pixelSize: 11,
+                        headAngle: 45,
+                        polygon: true,
+                        pathOptions: {
+                            stroke: true,
+                            weight: 1.5,
+                            color: '#1e1b4b',
+                            fillColor: '#ffffff',
+                            fillOpacity: 1
+                        }
+                    })
+                }
+            ]
+        }).addTo(map);
+    } catch (e) {
+        console.warn('PolylineDecorator note:', e);
+    }
+}
+
+/**
+ * Snaps route to actual street network via backend API with client OSRM fallback
+ */
+async function loadAndSnapRoute() {
+    if (routePoints.length < 2) {
+        updateSnapBadge('idle', 'No transit telemetry recorded');
+        return;
+    }
+
+    updateSnapBadge('loading', 'Matching GPS trace to street network...');
+
+    try {
+        const snapUrl = `{{ url('/tracking/engineer') }}/{{ $engineer->id }}/snapped-route?date={{ $date }}`;
+        const response = await fetch(snapUrl);
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        const data = await response.json();
+
+        if (data.success && data.coordinates && data.coordinates.length > 1) {
+            applySnappedRoute(data.coordinates);
+            updateSnapBadge('success', 'Snapped to Street Network • ➔ Direction Flow');
+            return;
+        }
+    } catch (err) {
+        console.warn('Backend route snapping failed, trying direct OSRM...', err);
+    }
+
+    // Direct client OSRM fallback
+    try {
+        const clientSnapped = await snapRouteViaClientOsrm(routePoints);
+        if (clientSnapped && clientSnapped.length > 1) {
+            applySnappedRoute(clientSnapped);
+            updateSnapBadge('success', 'Snapped to Streets (OSRM) • ➔ Direction Flow');
+            return;
+        }
+    } catch (err2) {
+        console.warn('Client OSRM fallback failed:', err2);
+    }
+
+    // Fallback: Keep raw points with directional arrows
+    updateSnapBadge('fallback', 'Raw Telemetry Trace • ➔ Direction Flow');
+    applyDirectionDecorator(polyline);
+}
+
+/**
+ * Client-side OSRM routing fallback
+ */
+async function snapRouteViaClientOsrm(pts) {
+    const filtered = [];
+    for (let i = 0; i < pts.length; i++) {
+        if (filtered.length === 0) {
+            filtered.push(pts[i]);
+            continue;
+        }
+        const prev = filtered[filtered.length - 1];
+        const dist = Math.hypot(pts[i].lat - prev.lat, pts[i].lng - prev.lng) * 111000;
+        if (dist >= 12 || i === pts.length - 1) {
+            filtered.push(pts[i]);
+        }
+    }
+
+    if (filtered.length < 2) return null;
+
+    const chunkCoords = [];
+    const chunkSize = 25;
+
+    for (let i = 0; i < filtered.length - 1; i += (chunkSize - 1)) {
+        const chunk = filtered.slice(i, i + chunkSize);
+        if (chunk.length < 2) break;
+
+        const coordsStr = chunk.map(p => `${p.lng.toFixed(6)},${p.lat.toFixed(6)}`).join(';');
+        const url = `https://router.project-osrm.org/route/v1/driving/${coordsStr}?overview=full&geometries=geojson`;
+
+        const resp = await fetch(url);
+        if (!resp.ok) continue;
+        const json = await resp.json();
+
+        if (json.code === 'Ok' && json.routes && json.routes[0]) {
+            const geom = json.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
+            if (chunkCoords.length > 0) geom.shift();
+            chunkCoords.push(...geom);
+        } else {
+            const rawChunk = chunk.map(p => [p.lat, p.lng]);
+            if (chunkCoords.length > 0) rawChunk.shift();
+            chunkCoords.push(...rawChunk);
+        }
+    }
+
+    return chunkCoords.length > 1 ? chunkCoords : null;
+}
+
+/**
+ * Apply snapped street coordinates to polyline, casing, and decorator
+ */
+function applySnappedRoute(coords) {
+    if (!polyline || !coords || coords.length < 2) return;
+
+    if (routeCasing) {
+        routeCasing.setLatLngs(coords);
+    }
+    polyline.setLatLngs(coords);
+    polyline.setStyle({
+        color: '#4f46e5',
+        weight: 5.5,
+        opacity: 0.95
+    });
+
+    // Reapply directional arrowheads along the actual street polyline
+    applyDirectionDecorator(polyline);
+
+    // Build active simulation points for smooth street riding
+    rebuildSimulationPoints(coords);
+}
+
+/**
+ * Rebuild simulation points along snapped street geometry with interpolated speeds & timestamps
+ */
+function rebuildSimulationPoints(snappedCoords) {
+    if (!snappedCoords || snappedCoords.length === 0) return;
+
+    activeSimulationPoints = snappedCoords.map((coord) => {
+        const lat = coord[0];
+        const lng = coord[1];
+
+        // Match with nearest recorded telemetry point for time & speed metadata
+        let nearestRaw = routePoints[0];
+        let minDist = Infinity;
+        for (let i = 0; i < routePoints.length; i++) {
+            const d = Math.hypot(routePoints[i].lat - lat, routePoints[i].lng - lng);
+            if (d < minDist) {
+                minDist = d;
+                nearestRaw = routePoints[i];
+            }
+        }
+
+        return {
+            lat: lat,
+            lng: lng,
+            speed: nearestRaw ? (nearestRaw.speed || 0) : 0,
+            time: nearestRaw ? nearestRaw.time : '--:--',
+            time_full: nearestRaw ? nearestRaw.time_full : '--:--'
+        };
+    });
+
+    // Re-sync timeline slider
+    const slider = document.getElementById('timeline_slider');
+    slider.max = Math.max(1, activeSimulationPoints.length - 1);
+    if (currentIndex >= activeSimulationPoints.length) {
+        currentIndex = activeSimulationPoints.length - 1;
+    }
+    stepTo(currentIndex);
+}
+
+function updateSnapBadge(state, message) {
+    const badge = document.getElementById('road_snap_badge');
+    const dot = document.getElementById('road_snap_dot');
+    const text = document.getElementById('road_snap_text');
+    if (!badge || !dot || !text) return;
+
+    text.textContent = message;
+
+    if (state === 'loading') {
+        dot.className = 'w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse';
+    } else if (state === 'success') {
+        dot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-400';
+    } else if (state === 'fallback') {
+        dot.className = 'w-2.5 h-2.5 rounded-full bg-sky-400';
+    } else {
+        dot.className = 'w-2.5 h-2.5 rounded-full bg-slate-400';
+    }
+}
+
 function togglePlayback() {
     if (isPlaying) {
         pausePlayback();
@@ -343,15 +578,15 @@ function togglePlayback() {
 }
 
 function startPlayback() {
-    if (routePoints.length === 0) return;
+    if (activeSimulationPoints.length === 0) return;
     isPlaying = true;
     document.getElementById('play_icon').className = 'fa-solid fa-pause';
 
     clearInterval(playInterval);
-    const frameRate = Math.max(15, Math.floor(250 / speedMultiplier));
+    const frameRate = Math.max(15, Math.floor(200 / speedMultiplier));
 
     playInterval = setInterval(() => {
-        if (currentIndex >= routePoints.length - 1) {
+        if (currentIndex >= activeSimulationPoints.length - 1) {
             pausePlayback();
             return;
         }
@@ -390,20 +625,24 @@ function setSpeed(mult) {
 
 function onScrubberSeek(val) {
     pausePlayback();
-    const idx = Math.floor((val / 1000) * (routePoints.length - 1));
-    currentIndex = idx;
-    stepTo(idx);
+    if (activeSimulationPoints.length === 0) return;
+    const maxVal = parseInt(document.getElementById('timeline_slider').max) || (activeSimulationPoints.length - 1);
+    const idx = Math.min(Math.round((val / maxVal) * (activeSimulationPoints.length - 1)), activeSimulationPoints.length - 1);
+    currentIndex = Math.max(0, idx);
+    stepTo(currentIndex);
 }
 
 function stepTo(idx) {
-    if (!routePoints[idx]) return;
+    if (!activeSimulationPoints || !activeSimulationPoints[idx]) return;
 
-    const pt = routePoints[idx];
-    bikeMarker.setLatLng([pt.lat, pt.lng]);
+    const pt = activeSimulationPoints[idx];
+    if (bikeMarker) {
+        bikeMarker.setLatLng([pt.lat, pt.lng]);
+    }
 
     // Calculate heading rotation towards next point
-    if (idx < routePoints.length - 1) {
-        const next = routePoints[idx + 1];
+    if (idx < activeSimulationPoints.length - 1) {
+        const next = activeSimulationPoints[idx + 1];
         const heading = calculateBearing(pt.lat, pt.lng, next.lat, next.lng);
         const pin = document.getElementById('bike_pin');
         if (pin) pin.style.transform = `rotate(${heading}deg)`;
@@ -413,15 +652,16 @@ function stepTo(idx) {
 }
 
 function updatePlaybackUI(idx) {
-    if (!routePoints[idx]) return;
-    const pt = routePoints[idx];
+    if (!activeSimulationPoints || !activeSimulationPoints[idx]) return;
+    const pt = activeSimulationPoints[idx];
 
     // Slider
     const slider = document.getElementById('timeline_slider');
-    slider.value = Math.floor((idx / (routePoints.length - 1)) * 1000);
+    const maxVal = parseInt(slider.max) || (activeSimulationPoints.length - 1);
+    slider.value = Math.round((idx / (activeSimulationPoints.length - 1)) * maxVal);
 
     // Clock
-    document.getElementById('current_time_display').textContent = pt.time_full || pt.time;
+    document.getElementById('current_time_display').textContent = pt.time_full || pt.time || '--:--';
 
     // Status pill
     const speed = pt.speed || 0;
@@ -448,12 +688,12 @@ function jumpToSegment(idx, lat, lng) {
     if (idx < 0 || idx >= segments.length) return;
     const seg = segments[idx];
 
-    // Find the closest point in routePoints
+    // Find the closest point in activeSimulationPoints
     let bestIdx = 0;
     let minDiff = Infinity;
 
-    if (routePoints && routePoints.length > 0) {
-        routePoints.forEach((pt, pIdx) => {
+    if (activeSimulationPoints && activeSimulationPoints.length > 0) {
+        activeSimulationPoints.forEach((pt, pIdx) => {
             if (pt.lat && pt.lng && lat && lng) {
                 const d = Math.hypot(pt.lat - lat, pt.lng - lng);
                 if (d < minDiff) {
@@ -469,7 +709,7 @@ function jumpToSegment(idx, lat, lng) {
     stepTo(currentIndex);
 
     if (lat && lng) {
-        map.flyTo([lat, lng], 15, { duration: 0.6 });
+        map.flyTo([lat, lng], 16, { duration: 0.6 });
     }
 
     // Highlight timeline card

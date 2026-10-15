@@ -302,6 +302,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/playback', [TrackingWebController::class, 'playback'])->name('playback');
         Route::get('/playback/{id}', [TrackingWebController::class, 'playback'])->name('playback.id');
         Route::get('/engineer/{id}', [TrackingWebController::class, 'playback'])->name('engineer.playback');
+        Route::get('/engineer/{id}/snapped-route', [TrackingWebController::class, 'snappedRoute'])->name('engineer.snapped-route');
         Route::get('/reports', [TrackingWebController::class, 'reports'])->name('reports');
         Route::get('/reports/export-csv', [TrackingWebController::class, 'exportCsv'])->name('reports.export-csv');
         Route::get('/attendance', [TrackingWebController::class, 'attendance'])->name('attendance');

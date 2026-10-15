@@ -17,6 +17,8 @@ use App\Services\Tracking\TrackingEngine;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Http;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class TrackingWebController extends Controller
@@ -263,6 +265,151 @@ class TrackingWebController extends Controller
         return view('tracking.playback', compact(
             'engineer', 'date', 'summary', 'attendance', 'segments', 'rawPoints', 'allEngineers', 'geofences', 'bankBranches'
         ));
+    }
+
+    /**
+     * Map-Matching & Street Snapping API:
+     * Takes breadcrumb points, filters out stationary jitter, and matches them
+     * to actual street network geometries using OSRM / cached route snapping.
+     */
+    public function snappedRoute(Request $request, $id)
+    {
+        $engineer = User::findOrFail($id);
+        $date = $request->query('date', Carbon::today()->toDateString());
+
+        $rawPoints = LocationPoint::where('user_id', $engineer->id)
+            ->whereBetween('recorded_at', [
+                Carbon::parse($date)->startOfDay(),
+                Carbon::parse($date)->endOfDay()
+            ])
+            ->orderBy('recorded_at', 'asc')
+            ->get(['lat', 'lng', 'speed', 'recorded_at']);
+
+        if ($rawPoints->count() < 2) {
+            return response()->json([
+                'success' => true,
+                'snapped' => false,
+                'point_count' => $rawPoints->count(),
+                'coordinates' => $rawPoints->map(fn($p) => [(float)$p->lat, (float)$p->lng])->values()->all()
+            ]);
+        }
+
+        $cacheKey = "tracking_snapped_route_{$engineer->id}_{$date}_" . $rawPoints->count();
+
+        $snappedCoordinates = Cache::remember($cacheKey, 86400, function () use ($rawPoints) {
+            return $this->snapCoordinatesToStreets($rawPoints);
+        });
+
+        return response()->json([
+            'success' => true,
+            'snapped' => true,
+            'point_count' => count($snappedCoordinates),
+            'coordinates' => $snappedCoordinates
+        ]);
+    }
+
+    /**
+     * Snap GPS trace coordinates to actual streets using OSRM.
+     */
+    protected function snapCoordinatesToStreets($points): array
+    {
+        // 1. Filter out consecutive jitter points (< 10m apart) unless separated by time
+        $filtered = [];
+        $lastPt = null;
+
+        foreach ($points as $pt) {
+            $lat = (float)$pt->lat;
+            $lng = (float)$pt->lng;
+
+            if ($lastPt === null) {
+                $filtered[] = ['lat' => $lat, 'lng' => $lng];
+                $lastPt = ['lat' => $lat, 'lng' => $lng];
+                continue;
+            }
+
+            $dist = TrackingEngine::haversine($lastPt['lat'], $lastPt['lng'], $lat, $lng);
+            if ($dist >= 12) {
+                $filtered[] = ['lat' => $lat, 'lng' => $lng];
+                $lastPt = ['lat' => $lat, 'lng' => $lng];
+            }
+        }
+
+        // Always ensure the final point is included
+        $finalPt = $points->last();
+        if ($finalPt) {
+            $finalArr = ['lat' => (float)$finalPt->lat, 'lng' => (float)$finalPt->lng];
+            if (empty($filtered) || end($filtered) !== $finalArr) {
+                $filtered[] = $finalArr;
+            }
+        }
+
+        if (count($filtered) < 2) {
+            return $points->map(fn($p) => [(float)$p->lat, (float)$p->lng])->values()->all();
+        }
+
+        // 2. Chunk waypoints into batches of ~25 waypoints to stay within OSRM limits and avoid timeouts
+        $snappedPath = [];
+        $chunkSize = 25;
+        $total = count($filtered);
+
+        for ($i = 0; $i < $total - 1; $i += ($chunkSize - 1)) {
+            $chunk = array_slice($filtered, $i, $chunkSize);
+            if (count($chunk) < 2) {
+                break;
+            }
+
+            $chunkSnapped = $this->queryOsrmRoute($chunk);
+            if (!empty($chunkSnapped)) {
+                // If not the first chunk, skip the first duplicate connecting point
+                if (!empty($snappedPath)) {
+                    array_shift($chunkSnapped);
+                }
+                foreach ($chunkSnapped as $c) {
+                    $snappedPath[] = $c;
+                }
+            } else {
+                // Fallback to straight line points for this chunk
+                $rawChunkCoords = array_map(fn($p) => [$p['lat'], $p['lng']], $chunk);
+                if (!empty($snappedPath)) {
+                    array_shift($rawChunkCoords);
+                }
+                foreach ($rawChunkCoords as $c) {
+                    $snappedPath[] = $c;
+                }
+            }
+        }
+
+        return !empty($snappedPath) ? $snappedPath : $points->map(fn($p) => [(float)$p->lat, (float)$p->lng])->values()->all();
+    }
+
+    /**
+     * Query OSRM routing service for a batch of waypoints.
+     */
+    protected function queryOsrmRoute(array $waypoints): array
+    {
+        try {
+            $coordsStr = implode(';', array_map(fn($p) => round($p['lng'], 6) . ',' . round($p['lat'], 6), $waypoints));
+            $url = "https://router.project-osrm.org/route/v1/driving/{$coordsStr}?overview=full&geometries=geojson";
+
+            $response = Http::withoutVerifying()
+                ->withHeaders(['User-Agent' => 'ComplaintManager/1.0 (Tracking; support@qmstraders.com)'])
+                ->timeout(5)
+                ->get($url);
+
+            if ($response->successful()) {
+                $data = $response->json();
+                if (($data['code'] ?? '') === 'Ok' && !empty($data['routes'][0]['geometry']['coordinates'])) {
+                    // Convert GeoJSON [lon, lat] -> [lat, lon]
+                    return array_map(function ($coord) {
+                        return [(float)$coord[1], (float)$coord[0]];
+                    }, $data['routes'][0]['geometry']['coordinates']);
+                }
+            }
+        } catch (\Throwable $e) {
+            \Log::warning("OSRM Route snapping fallback: " . $e->getMessage());
+        }
+
+        return [];
     }
 
     /**
