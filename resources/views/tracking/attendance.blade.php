@@ -97,8 +97,12 @@
                         <td class="py-3 px-3 font-medium">
                             @if($day->last_out_at)
                                 <span class="text-slate-900">{{ \Carbon\Carbon::parse($day->last_out_at)->timezone('Asia/Karachi')->format('h:i A') }}</span>
+                            @elseif($day->first_in_at && $day->still_inside)
+                                <span class="text-emerald-600 font-semibold flex items-center gap-1">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> Inside Office
+                                </span>
                             @else
-                                <span class="text-slate-400">Inside Office</span>
+                                <span class="text-slate-400">—</span>
                             @endif
                         </td>
                         <td class="py-3 px-3 text-slate-700">

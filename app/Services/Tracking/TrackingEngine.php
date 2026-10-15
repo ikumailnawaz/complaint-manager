@@ -608,10 +608,20 @@ class TrackingEngine
         $endOfDay = Carbon::parse($date)->endOfDay();
         $lateCutoff = Carbon::parse("{$date} {$lateTimeStr}:00");
 
-        // Primary office geofence
-        $office = Geofence::where('is_attendance_point', true)->where('is_active', true)->first();
-        if (!$office) {
+        // Primary office geofence resolution:
+        $user = User::find($userId);
+        $attendanceGeofences = Geofence::where('is_attendance_point', true)->where('is_active', true)->get();
+        if ($attendanceGeofences->isEmpty()) {
             return;
+        }
+
+        // Try to match geofence by user base_city first
+        $office = null;
+        if ($user && $user->base_city) {
+            $office = $attendanceGeofences->first(function ($gf) use ($user) {
+                return (stripos($gf->city ?? '', $user->base_city) !== false)
+                    || (stripos($gf->name ?? '', $user->base_city) !== false);
+            });
         }
 
         // Fetch points of the day sorted chronologically
@@ -619,6 +629,21 @@ class TrackingEngine
             ->whereBetween('recorded_at', [$startOfDay, $endOfDay])
             ->orderBy('recorded_at', 'asc')
             ->get();
+
+        // If engineer has points today, check if they visited ANY attendance geofence
+        if (!$office && $rawPoints->isNotEmpty()) {
+            foreach ($attendanceGeofences as $gf) {
+                $gfThreshold = max((int)$gf->radius_m + 60, 150);
+                foreach ($rawPoints as $pt) {
+                    if (self::haversine($pt->lat, $pt->lng, $gf->lat, $gf->lng) <= $gfThreshold) {
+                        $office = $gf;
+                        break 2;
+                    }
+                }
+            }
+        }
+
+        $office = $office ?? $attendanceGeofences->first();
 
         $att = AttendanceDay::firstOrNew(['user_id' => $userId, 'date' => $date]);
         $att->geofence_id = $office->id;
@@ -630,7 +655,8 @@ class TrackingEngine
             return;
         }
 
-        $officeRadiusThreshold = $office->radius_m + 25; // 25m buffer for GPS accuracy jitter
+        // Generous buffer: office radius + 60m buffer, min 150m for indoor building GPS degradation
+        $officeRadiusThreshold = max((int)$office->radius_m + 60, 150);
 
         // Segment raw points into distinct visits
         $visits = [];
@@ -652,8 +678,8 @@ class TrackingEngine
             } else {
                 if ($currentVisitStart !== null) {
                     $consecutiveOutside++;
-                    // If 2 or more points outside OR moved > radius + 40m, close this office visit
-                    if ($consecutiveOutside >= 2 || $dist > ($office->radius_m + 40)) {
+                    // If 3 or more points outside AND moved > radius + 60m, close this office visit
+                    if ($consecutiveOutside >= 3 && $dist > ($officeRadiusThreshold + 40)) {
                         $endTime = $lastInsidePt ? Carbon::parse($lastInsidePt->recorded_at) : $currentVisitStart;
                         $visits[] = [
                             'start' => $currentVisitStart,
