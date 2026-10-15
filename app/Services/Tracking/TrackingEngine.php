@@ -558,10 +558,15 @@ class TrackingEngine
         foreach ($geofences as $gf) {
             $dist = self::haversine($lat, $lng, $gf->lat, $gf->lng);
             if ($dist <= ($gf->radius_m + 30)) {
+                $gfName = $gf->name;
+                if (!str_contains(strtolower($gfName), 'office') && !str_contains(strtolower($gfName), 'workshop') && !str_contains(strtolower($gfName), 'hub')) {
+                    $gfName .= ' Office';
+                }
+                $proximity = $dist <= $gf->radius_m ? "Inside {$gfName}" : "Near {$gfName} Gate (" . round($dist) . 'm)';
                 return [
                     'kind'        => 'office',
-                    'label'       => $gf->name,
-                    'address'     => "Near {$gf->name} (within " . round($dist) . 'm)',
+                    'label'       => $gfName,
+                    'address'     => "{$proximity} • Attendance Geofence",
                     'ticket_id'   => null,
                     'geofence_id' => $gf->id,
                 ];

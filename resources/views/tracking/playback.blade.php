@@ -73,10 +73,13 @@
         <div class="lg:col-span-3 bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden relative flex flex-col">
             <div id="playback_map" class="w-full flex-1 z-10"></div>
 
-            <!-- Floating Snapped Route & Direction Indicator Pill -->
-            <div id="road_snap_badge" class="absolute top-3 left-14 z-[400] bg-slate-900/90 backdrop-blur-md px-3 py-1.5 rounded-xl shadow-lg border border-slate-700/80 text-xs font-semibold text-white flex items-center space-x-2 pointer-events-none transition-all">
+            <!-- Floating Snapped Route & Mode Toggle Pill -->
+            <div id="road_snap_badge" class="absolute top-3 left-14 z-[400] bg-slate-900/90 backdrop-blur-md px-3 py-1.5 rounded-xl shadow-lg border border-slate-700/80 text-xs font-semibold text-white flex items-center space-x-2 transition-all">
                 <span id="road_snap_dot" class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse"></span>
                 <span id="road_snap_text" class="text-[11px] font-medium text-slate-200">Matching route to street network...</span>
+                <button type="button" id="snap_toggle_btn" onclick="toggleRoadSnappingMode()" class="ml-2 px-2 py-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-indigo-300 hover:text-white text-[10px] font-bold border border-slate-600 transition flex items-center gap-1 cursor-pointer" title="Toggle between Street Network and Raw Telemetry">
+                    <i class="fa-solid fa-code-compare text-[9px]"></i> <span id="snap_toggle_text">View Raw</span>
+                </button>
             </div>
 
             <!-- Floating Selected Trip Isolation Banner -->
@@ -196,10 +199,22 @@
                             @else
                                 <span class="w-2.5 h-2.5 rounded-full inline-block" style="background-color: {{ $colorInfo['stroke'] }};"></span>
                             @endif
-                            <span>{{ $seg->label }}</span>
+                            @php
+                                $cardLabel = $seg->label;
+                                if ($isStop && $kind === 'office' && !str_contains(strtolower($cardLabel), 'office') && !str_contains(strtolower($cardLabel), 'workshop')) {
+                                    $cardLabel .= ' Office';
+                                }
+                            @endphp
+                            <span>{{ $cardLabel }}</span>
                         </div>
                         @if($seg->address)
-                            <div class="text-[11px] text-slate-500 mt-1 line-clamp-1">{{ $seg->address }}</div>
+                            @php
+                                $addr = $seg->address;
+                                if ($isStop && $kind === 'office' && !str_contains(strtolower($addr), 'office')) {
+                                    $addr = str_replace('Near ' . $seg->label, 'At ' . $seg->label . ' Office', $addr) . ' • Attendance Geofence';
+                                }
+                            @endphp
+                            <div class="text-[11px] text-slate-500 mt-1 line-clamp-1">{{ $addr }}</div>
                         @endif
                         <div class="mt-2 pt-1.5 border-t border-slate-200/60 flex items-center justify-between text-[11px] font-bold group-hover:opacity-100" style="color: {{ !$isStop ? $colorInfo['stroke'] : '#4f46e5' }};">
                             <span class="flex items-center gap-1">
@@ -873,12 +888,48 @@ async function loadAndSnapRoute() {
     updateSnapBadge('fallback', 'Raw Telemetry Trace • ➔ Direction Flow');
 }
 
+let isSnappedMode = true;
+let rawRouteCoords = (routePoints && routePoints.length > 0) ? routePoints.map(p => [p.lat, p.lng]) : [];
+let snappedRoadCoords = [];
+
+function toggleRoadSnappingMode() {
+    isSnappedMode = !isSnappedMode;
+    const btnText = document.getElementById('snap_toggle_text');
+    const badgeText = document.getElementById('road_snap_text');
+    const dot = document.getElementById('road_snap_dot');
+
+    if (isSnappedMode) {
+        if (snappedRoadCoords.length > 0) {
+            applySnappedRoadNetwork(snappedRoadCoords);
+        }
+        if (btnText) btnText.textContent = 'View Raw';
+        if (badgeText) badgeText.textContent = 'Snapped to Street Network • ➔ Direction Flow';
+        if (dot) dot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-400';
+    } else {
+        if (rawRouteCoords.length > 0) {
+            fullRouteCoords = rawRouteCoords;
+            fullSimulationPoints = routePoints.slice();
+            if (selectedTripIndex === null) {
+                activeSimulationPoints = fullSimulationPoints.slice();
+            }
+            buildAndRenderTrips(rawRouteCoords);
+            if (selectedTripIndex !== null && tripLayers[selectedTripIndex]) {
+                selectTrip(selectedTripIndex);
+            }
+        }
+        if (btnText) btnText.textContent = 'Snap Streets';
+        if (badgeText) badgeText.textContent = 'Raw Telemetry GPS Trace (Actual GPS Points)';
+        if (dot) dot.className = 'w-2.5 h-2.5 rounded-full bg-sky-400';
+    }
+}
+
 /**
  * Apply snapped street coordinates to all trips and simulation points
  */
 function applySnappedRoadNetwork(snappedCoords) {
     if (!snappedCoords || snappedCoords.length < 2) return;
 
+    snappedRoadCoords = snappedCoords;
     fullRouteCoords = snappedCoords;
 
     // Rebuild full simulation points along snapped street geometry
