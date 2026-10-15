@@ -693,10 +693,12 @@ class TrackingEngine
             }
         }
 
-        // Check latest point of the day: is engineer currently inside?
+        // Check latest point of the day: is engineer currently inside and actively reporting?
         $lastTotalPt = $rawPoints[count($rawPoints) - 1];
         $lastPtDist = self::haversine($lastTotalPt->lat, $lastTotalPt->lng, $office->lat, $office->lng);
-        $stillInside = ($lastPtDist <= $officeRadiusThreshold);
+        $isLastPtInside = ($lastPtDist <= $officeRadiusThreshold);
+        $isPointFresh = Carbon::parse($lastTotalPt->recorded_at)->diffInMinutes(now()) <= 15;
+        $stillInside = $isLastPtInside && $isPointFresh;
 
         // If currently inside, close active ongoing visit
         if ($currentVisitStart !== null) {
