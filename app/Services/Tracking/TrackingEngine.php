@@ -195,7 +195,7 @@ class TrackingEngine
         $stopRadiusM = (float)($settings['stop_radius_m'] ?? 80);
         $stopMinSec = max(120, ((int)($settings['stop_min_minutes'] ?? 2)) * 60);
         $stopExitRadiusM = (float)($settings['stop_exit_radius_m'] ?? 150);
-        $maxAccuracyM = (float)($settings['max_accuracy_m'] ?? 50);
+        $maxAccuracyM = (float)($settings['max_accuracy_m'] ?? 150);
 
         $startOfDay = Carbon::parse($date)->startOfDay();
         $endOfDay = Carbon::parse($date)->endOfDay();
@@ -224,8 +224,10 @@ class TrackingEngine
             if ($pt->lat < -90 || $pt->lat > 90 || $pt->lng < -180 || $pt->lng > 180) {
                 continue; // drop out-of-bounds coordinates
             }
+            // Allow up to 150m accuracy (required for offline GPS fixes on moving vehicles).
+            // But if point has extreme accuracy (>150m), drop it.
             if ($pt->accuracy !== null && $pt->accuracy > $maxAccuracyM) {
-                continue; // drop inaccurate jump
+                continue;
             }
             if ($lastPt) {
                 $dt = Carbon::parse($pt->recorded_at)->diffInSeconds(Carbon::parse($lastPt->recorded_at));
@@ -234,6 +236,10 @@ class TrackingEngine
                     $speedKmh = ($dist / $dt) * 3.6;
                     if ($speedKmh > 160) {
                         continue; // impossible teleport jump (>160 km/h)
+                    }
+                    // Filter indoor low-speed drift jumps: if almost stationary (< 1.5 km/h) and accuracy is low (> 80m), drop jump
+                    if ($speedKmh < 1.5 && $pt->accuracy !== null && $pt->accuracy > 80 && $dist > 25) {
+                        continue;
                     }
                 }
             }
@@ -269,18 +275,38 @@ class TrackingEngine
             $anchor = $cleanPoints[$i];
             $cluster = [$anchor];
 
+            // Check if anchor is inside any known Office / Workshop geofence
+            $anchorGf = null;
+            foreach ($geofences as $gf) {
+                if (self::haversine($anchor->lat, $anchor->lng, $gf->lat, $gf->lng) <= ($gf->radius_m + 60)) {
+                    $anchorGf = $gf;
+                    break;
+                }
+            }
+
             while ($j < $n) {
                 $candidate = $cleanPoints[$j];
                 $distToAnchor = self::haversine($anchor->lat, $anchor->lng, $candidate->lat, $candidate->lng);
 
-                if ($distToAnchor <= $stopRadiusM) {
+                // If anchor is within workshop/office, candidate is inside if within geofence radius + tolerance
+                $isInsideGf = false;
+                if ($anchorGf) {
+                    $distToGf = self::haversine($candidate->lat, $candidate->lng, $anchorGf->lat, $anchorGf->lng);
+                    if ($distToGf <= ($anchorGf->radius_m + 60)) {
+                        $isInsideGf = true;
+                    }
+                }
+
+                if ($distToAnchor <= $stopRadiusM || $isInsideGf) {
                     $cluster[] = $candidate;
                     $j++;
                 } else {
                     // Check exit hysteresis: must be > exit radius for 3 consecutive points
                     $exitConfirmed = true;
                     for ($k = $j; $k < min($j + 3, $n); $k++) {
-                        if (self::haversine($anchor->lat, $anchor->lng, $cleanPoints[$k]->lat, $cleanPoints[$k]->lng) <= $stopRadiusM) {
+                        $kDist = self::haversine($anchor->lat, $anchor->lng, $cleanPoints[$k]->lat, $cleanPoints[$k]->lng);
+                        $kInsideGf = $anchorGf && (self::haversine($cleanPoints[$k]->lat, $cleanPoints[$k]->lng, $anchorGf->lat, $anchorGf->lng) <= ($anchorGf->radius_m + 60));
+                        if ($kDist <= $stopRadiusM || $kInsideGf) {
                             $exitConfirmed = false;
                             break;
                         }
@@ -302,9 +328,21 @@ class TrackingEngine
                 // We have a confirmed STOP
                 // First, flush any preceding moving buffer as a DRIVE
                 if (!empty($movingBuffer)) {
-                    $driveSeg = $this->buildDriveSegment($movingBuffer, $date);
+                    $driveSeg = $this->buildDriveSegment($movingBuffer, $date, $geofences);
                     if ($driveSeg) {
                         $segments[] = $driveSeg;
+                    } elseif (!empty($segments)) {
+                        // Jitter buffer rejected as a drive: extend previous stop if applicable
+                        $lastIdx = count($segments) - 1;
+                        if ($segments[$lastIdx]['type'] === 'stop') {
+                            $lastBufPt = end($movingBuffer);
+                            $newEnd = Carbon::parse($lastBufPt->recorded_at);
+                            if ($newEnd->gt(Carbon::parse($segments[$lastIdx]['ended_at']))) {
+                                $segments[$lastIdx]['ended_at'] = $newEnd;
+                                $segments[$lastIdx]['duration_sec'] = $newEnd->diffInSeconds(Carbon::parse($segments[$lastIdx]['started_at']));
+                                $segments[$lastIdx]['point_count'] += count($movingBuffer);
+                            }
+                        }
                     }
                     $movingBuffer = [];
                 }
@@ -322,25 +360,44 @@ class TrackingEngine
                 // Label the stop
                 $labelInfo = $this->labelStop($cLat, $cLng, $geofences, $tickets);
 
-                $segments[] = [
-                    'type'         => 'stop',
-                    'started_at'   => $firstTime,
-                    'ended_at'     => $lastTime,
-                    'duration_sec' => $clusterDuration,
-                    'distance_m'   => 0,
-                    'lat'          => $cLat,
-                    'lng'          => $cLng,
-                    'end_lat'      => $cLat,
-                    'end_lng'      => $cLng,
-                    'kind'         => $labelInfo['kind'],
-                    'label'        => $labelInfo['label'],
-                    'address'      => $labelInfo['address'],
-                    'ticket_id'    => $labelInfo['ticket_id'],
-                    'geofence_id'  => $labelInfo['geofence_id'],
-                    'point_count'  => count($cluster),
-                    'avg_speed_kmh'=> 0,
-                    'max_speed_kmh'=> 0,
-                ];
+                // Check if this stop can be merged into immediately preceding stop (same location/geofence)
+                $mergedWithPrev = false;
+                if (!empty($segments)) {
+                    $lastIdx = count($segments) - 1;
+                    $prevSeg = &$segments[$lastIdx];
+                    if ($prevSeg['type'] === 'stop') {
+                        $distBetweenStops = self::haversine($prevSeg['lat'], $prevSeg['lng'], $cLat, $cLng);
+                        // If same geofence or within 80m of previous stop
+                        if (($prevSeg['geofence_id'] && $prevSeg['geofence_id'] === $labelInfo['geofence_id']) || $distBetweenStops <= 80) {
+                            $prevSeg['ended_at'] = $lastTime;
+                            $prevSeg['duration_sec'] = $lastTime->diffInSeconds(Carbon::parse($prevSeg['started_at']));
+                            $prevSeg['point_count'] += count($cluster);
+                            $mergedWithPrev = true;
+                        }
+                    }
+                }
+
+                if (!$mergedWithPrev) {
+                    $segments[] = [
+                        'type'         => 'stop',
+                        'started_at'   => $firstTime,
+                        'ended_at'     => $lastTime,
+                        'duration_sec' => $clusterDuration,
+                        'distance_m'   => 0,
+                        'lat'          => $cLat,
+                        'lng'          => $cLng,
+                        'end_lat'      => $cLat,
+                        'end_lng'      => $cLng,
+                        'kind'         => $labelInfo['kind'],
+                        'label'        => $labelInfo['label'],
+                        'address'      => $labelInfo['address'],
+                        'ticket_id'    => $labelInfo['ticket_id'],
+                        'geofence_id'  => $labelInfo['geofence_id'],
+                        'point_count'  => count($cluster),
+                        'avg_speed_kmh'=> 0,
+                        'max_speed_kmh'=> 0,
+                    ];
+                }
 
                 // Advance i to j
                 $i = $j;
@@ -353,9 +410,20 @@ class TrackingEngine
 
         // Flush remaining moving points
         if (!empty($movingBuffer)) {
-            $driveSeg = $this->buildDriveSegment($movingBuffer, $date);
+            $driveSeg = $this->buildDriveSegment($movingBuffer, $date, $geofences);
             if ($driveSeg) {
                 $segments[] = $driveSeg;
+            } elseif (!empty($segments)) {
+                $lastIdx = count($segments) - 1;
+                if ($segments[$lastIdx]['type'] === 'stop') {
+                    $lastBufPt = end($movingBuffer);
+                    $newEnd = Carbon::parse($lastBufPt->recorded_at);
+                    if ($newEnd->gt(Carbon::parse($segments[$lastIdx]['ended_at']))) {
+                        $segments[$lastIdx]['ended_at'] = $newEnd;
+                        $segments[$lastIdx]['duration_sec'] = $newEnd->diffInSeconds(Carbon::parse($segments[$lastIdx]['started_at']));
+                        $segments[$lastIdx]['point_count'] += count($movingBuffer);
+                    }
+                }
             }
         }
 
@@ -487,16 +555,24 @@ class TrackingEngine
 
     /**
      * Build drive segment from moving points buffer.
+     * Rejects stationary indoor jitter and geofence dwell hopping.
      */
-    private function buildDriveSegment(array $points, string $date): ?array
+    private function buildDriveSegment(array $points, string $date, $geofences = []): ?array
     {
         if (count($points) < 2) {
             return null;
         }
 
+        $firstPt = $points[0];
+        $lastPt = $points[count($points) - 1];
+        $startTime = Carbon::parse($firstPt->recorded_at);
+        $endTime = Carbon::parse($lastPt->recorded_at);
+        $durSec = $endTime->diffInSeconds($startTime);
+
         $totalDist = 0;
         $maxSpeed = 0;
         $speeds = [];
+        $maxDisplacementFromStart = 0;
 
         for ($k = 0; $k < count($points) - 1; $k++) {
             $p1 = $points[$k];
@@ -516,17 +592,46 @@ class TrackingEngine
             }
         }
 
-        $firstPt = $points[0];
-        $lastPt = $points[count($points) - 1];
-        $startTime = Carbon::parse($firstPt->recorded_at);
-        $endTime = Carbon::parse($lastPt->recorded_at);
-        $durSec = $endTime->diffInSeconds($startTime);
-
-        if ($durSec < 15 && $totalDist < 30) {
-            return null; // negligible noise
+        // Compute maximum distance reached from the start of the buffer
+        foreach ($points as $p) {
+            $disp = self::haversine($firstPt->lat, $firstPt->lng, $p->lat, $p->lng);
+            if ($disp > $maxDisplacementFromStart) {
+                $maxDisplacementFromStart = $disp;
+            }
         }
 
         $avgSpeed = !empty($speeds) ? array_sum($speeds) / count($speeds) : 0;
+
+        // 1. Negligible duration and distance
+        if ($durSec < 15 && $totalDist < 30) {
+            return null;
+        }
+
+        // 2. Workshop / Office Geofence Dwell Containment:
+        // If max displacement from start is < 250m, check if points are within a workshop/office geofence
+        if ($maxDisplacementFromStart < 250 && !empty($geofences)) {
+            foreach ($geofences as $gf) {
+                $distStart = self::haversine($firstPt->lat, $firstPt->lng, $gf->lat, $gf->lng);
+                $distEnd = self::haversine($lastPt->lat, $lastPt->lng, $gf->lat, $gf->lng);
+                if ($distStart <= ($gf->radius_m + 80) && $distEnd <= ($gf->radius_m + 80)) {
+                    // Entire movement is inside the workshop/office boundary: stationary dwell, not a drive
+                    return null;
+                }
+            }
+        }
+
+        // 3. Stationary Jitter Drift:
+        // Accumulated hops are large, but device never actually moved > 180m away from starting position
+        // and average speed is low (< 10 km/h) or maximum speed is < 15 km/h
+        if ($maxDisplacementFromStart < 180 && $avgSpeed < 10) {
+            return null;
+        }
+
+        // 4. Minimum vehicular displacement check:
+        // A real transit drive must either travel at vehicular speeds (> 15 km/h) or reach at least 250m from start
+        if ($maxDisplacementFromStart < 250 && $maxSpeed < 15) {
+            return null;
+        }
 
         return [
             'type'         => 'drive',
