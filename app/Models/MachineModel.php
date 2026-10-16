@@ -17,13 +17,41 @@ class MachineModel extends Model {
     public function pmMachines(): HasMany {
         return $this->hasMany(PmMachine::class);
     }
+    public const STANDARD_TYPES = [
+        'Cash Sorting Machine',
+        'Cash Counting Machine',
+        'Cash Binding Machine',
+        'Shrink Wrapping Machine',
+        'ATM',
+        'CDM',
+        'POS',
+        'Kiosk',
+        'Other Equipment',
+    ];
+
     public function getMachineTypeIconAttribute(): string {
-        return match($this->machine_type) {
+        $normalized = strtolower(str_replace([' ', '_', '-'], '', $this->machine_type ?? ''));
+        return match($normalized) {
             'atm' => 'fa-building-columns',
             'cdm' => 'fa-dollar-sign',
             'pos' => 'fa-credit-card',
             'kiosk' => 'fa-tablet-screen-button',
+            'cashsortingmachine', 'cashsorting', 'sortingmachine' => 'fa-money-bill-transfer',
+            'cashcountingmachine', 'cashcounting', 'countingmachine' => 'fa-money-bill-1-wave',
+            'cashbindingmachine', 'cashbinding', 'bindingmachine' => 'fa-box-archive',
+            'shrinkwrappingmachine', 'shrinkwrapmachine', 'shrinkwrap' => 'fa-boxes-packing',
             default => 'fa-server',
+        };
+    }
+
+    public function getMachineTypeLabelAttribute(): string {
+        return match(strtolower(trim($this->machine_type ?? ''))) {
+            'atm' => 'ATM (Cash Dispenser)',
+            'cdm' => 'CDM (Cash Deposit)',
+            'pos' => 'POS Terminal',
+            'kiosk' => 'Self-Service Kiosk',
+            'other' => 'Other Equipment',
+            default => $this->machine_type ?: 'Unknown',
         };
     }
 }

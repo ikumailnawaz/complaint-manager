@@ -180,6 +180,12 @@
                         <a href="{{ route('tickets.index', array_merge(request()->except('status'), request('status') === 'awaiting_approval' ? [] : ['status' => 'awaiting_approval'])) }}" class="px-2.5 py-1 rounded-lg border {{ request('status') === 'awaiting_approval' ? 'bg-amber-100 border-amber-400 text-amber-900 font-bold' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100' }} transition">
                             <i class="fa-solid fa-hourglass-half mr-1 text-amber-600"></i> Awaiting Approval
                         </a>
+                        <a href="{{ route('tickets.index', array_merge(request()->except('ticket_type'), request('ticket_type') === 'installation' ? [] : ['ticket_type' => 'installation'])) }}" class="px-2.5 py-1 rounded-lg border {{ request('ticket_type') === 'installation' ? 'bg-purple-100 border-purple-400 text-purple-900 font-bold' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100' }} transition">
+                            <i class="fa-solid fa-screwdriver-wrench mr-1 text-purple-600"></i> Installations
+                        </a>
+                        <a href="{{ route('tickets.index', array_merge(request()->except('ticket_type'), request('ticket_type') === 'complaint' ? [] : ['ticket_type' => 'complaint'])) }}" class="px-2.5 py-1 rounded-lg border {{ request('ticket_type') === 'complaint' ? 'bg-amber-100 border-amber-400 text-amber-900 font-bold' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100' }} transition">
+                            <i class="fa-solid fa-triangle-exclamation mr-1 text-amber-600"></i> Complaints
+                        </a>
 
                         @if(request('from_date') || request('to_date'))
                             <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-sky-50 text-sky-700 border border-sky-200 text-xs font-semibold">
@@ -248,6 +254,12 @@
                                                     <i class="fa-solid fa-eye text-sky-600 w-4"></i>
                                                     <span>View Ticket Details</span>
                                                 </a>
+                                                <button type="button" 
+                                                        onclick="openViewProgressModal({{ $t->id }})" 
+                                                        class="w-full text-left flex items-center space-x-2 px-3 py-2 text-xs text-indigo-700 hover:bg-indigo-50 font-bold transition cursor-pointer">
+                                                    <i class="fa-solid fa-chart-line text-indigo-600 w-4"></i>
+                                                    <span>View Progress</span>
+                                                </button>
                                                 @if($t->hasSupportingDocument())
                                                 <a href="{{ $t->supportingDocumentUrl() }}" target="_blank" class="flex items-center space-x-2 px-3 py-2 text-xs text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 font-bold transition">
                                                     <i class="fa-solid fa-file-circle-check text-emerald-600 w-4"></i>
@@ -417,6 +429,13 @@
                                 <a href="{{ route('tickets.show', $t) }}" class="text-sky-600 hover:text-sky-800 hover:underline flex items-center space-x-1.5">
                                     <span>{{ $t->ticket_no }}</span>
                                 </a>
+                                @if($t->isInstallation())
+                                    <div>
+                                        <span class="inline-flex items-center gap-1 mt-0.5 text-[9px] px-1.5 py-0.5 bg-purple-100 text-purple-800 border border-purple-200 rounded font-bold uppercase tracking-wider">
+                                            <i class="fa-solid fa-screwdriver-wrench text-[8px]"></i> Installation
+                                        </span>
+                                    </div>
+                                @endif
                                 @if($t->ticket_no_source === 'from_email')
                                     <span class="inline-block mt-0.5 text-[9px] px-1.5 py-0.2 bg-purple-100 text-purple-800 rounded font-semibold uppercase">From Bank Email</span>
                                 @endif
@@ -643,6 +662,7 @@ document.addEventListener('click', function(e) {
 @include('tickets.partials.workshop-modal')
 @include('tickets.partials.claim-expense-modal')
 @include('tickets.partials.approval-modals')
+@include('tickets.partials.progress-modal')
 @if(!$isEngineer)
     @include('tickets.partials.send-resolution-email-modal')
     @include('tickets.partials.index-reopen-modal')

@@ -149,6 +149,14 @@ class PartRequestController extends Controller
             'machine_model_id'  => 'nullable|exists:machine_models,id',
             'machine_serial_no' => 'nullable|string|max:100',
             'fault_description' => 'required|string',
+            'fault_video'       => 'nullable|file|mimes:mp4,mov,avi,wmv,webm,mkv|max:102400',
+            'has_additional_machine' => 'nullable|boolean',
+            'additional_machine_model_id' => 'nullable|exists:machine_models,id',
+            'additional_machine_model' => 'nullable|string|max:100',
+            'additional_machine_serial_no' => 'nullable|string|max:100',
+            'additional_machine_type' => 'nullable|string|max:100',
+            'additional_fault_description' => 'nullable|string',
+            'additional_fault_video' => 'nullable|file|mimes:mp4,mov,avi,wmv,webm,mkv|max:102400',
             'items'             => 'required|array|min:1',
             'items.*.part_id'   => 'required|exists:parts,id',
             'items.*.qty'       => 'required|integer|min:1',
@@ -165,11 +173,49 @@ class PartRequestController extends Controller
             return back()->with('error', "Machine is in transit to central workshop. Requesting spare parts is locked while cargo is in transit.");
         }
 
-        $pr = DB::transaction(function () use ($data) {
+        $primaryVideoPath = null;
+        if ($request->hasFile('fault_video')) {
+            $primaryVideoPath = $request->file('fault_video')->store('part-requests/videos', 'public');
+            try {
+                $sourcePath = Storage::disk('public')->path($primaryVideoPath);
+                $publicTarget = public_path('storage/' . $primaryVideoPath);
+                if (!file_exists(dirname($publicTarget))) {
+                    @mkdir(dirname($publicTarget), 0777, true);
+                }
+                @copy($sourcePath, $publicTarget);
+            } catch (\Throwable $e) {}
+        }
+
+        $additionalVideoPath = null;
+        if ($request->hasFile('additional_fault_video')) {
+            $additionalVideoPath = $request->file('additional_fault_video')->store('part-requests/videos', 'public');
+            try {
+                $sourcePath = Storage::disk('public')->path($additionalVideoPath);
+                $publicTarget = public_path('storage/' . $additionalVideoPath);
+                if (!file_exists(dirname($publicTarget))) {
+                    @mkdir(dirname($publicTarget), 0777, true);
+                }
+                @copy($sourcePath, $publicTarget);
+            } catch (\Throwable $e) {}
+        }
+
+        $pr = DB::transaction(function () use ($data, $primaryVideoPath, $additionalVideoPath) {
             $engineerId = auth()->id();
             $ticketId = (int) $data['ticket_id'];
             $machineModelId = !empty($data['machine_model_id']) ? (int) $data['machine_model_id'] : null;
             $machineSerialNo = $data['machine_serial_no'] ?? null;
+
+            $hasAdditional = !empty($data['has_additional_machine']) || !empty($data['additional_machine_model_id']) || !empty($data['additional_machine_serial_no']);
+
+            $additionalModelName = $data['additional_machine_model'] ?? null;
+            $additionalMachineType = $data['additional_machine_type'] ?? null;
+            if (!empty($data['additional_machine_model_id'])) {
+                $foundModel = MachineModel::find($data['additional_machine_model_id']);
+                if ($foundModel) {
+                    $additionalModelName = $additionalModelName ?: $foundModel->name;
+                    $additionalMachineType = $additionalMachineType ?: $foundModel->machine_type_label;
+                }
+            }
 
             $pr = PartRequest::create([
                 'request_number'    => PartRequest::generateRequestNumber(),
@@ -178,6 +224,13 @@ class PartRequestController extends Controller
                 'machine_model_id'  => $machineModelId,
                 'machine_serial_no' => $machineSerialNo,
                 'fault_description' => $data['fault_description'],
+                'fault_video_path'  => $primaryVideoPath,
+                'additional_machine_model_id'  => $hasAdditional ? (!empty($data['additional_machine_model_id']) ? (int) $data['additional_machine_model_id'] : null) : null,
+                'additional_machine_model'     => $hasAdditional ? $additionalModelName : null,
+                'additional_machine_serial_no' => $hasAdditional ? ($data['additional_machine_serial_no'] ?? null) : null,
+                'additional_machine_type'      => $hasAdditional ? $additionalMachineType : null,
+                'additional_fault_description' => $hasAdditional ? ($data['additional_fault_description'] ?? null) : null,
+                'additional_fault_video_path'  => $hasAdditional ? $additionalVideoPath : null,
                 'status'            => 'pending_stock_check',
             ]);
 
@@ -307,6 +360,12 @@ class PartRequestController extends Controller
             'machine_model_id'   => 'nullable|exists:machine_models,id',
             'machine_serial_no'  => 'nullable|string|max:100',
             'fault_description'  => 'required|string',
+            'has_additional_machine' => 'nullable|boolean',
+            'additional_machine_model_id' => 'nullable|exists:machine_models,id',
+            'additional_machine_model' => 'nullable|string|max:100',
+            'additional_machine_serial_no' => 'nullable|string|max:100',
+            'additional_machine_type' => 'nullable|string|max:100',
+            'additional_fault_description' => 'nullable|string',
             'items'              => 'required|array|min:1',
             'items.*.part_id'    => 'required|exists:parts,id',
             'items.*.qty'        => 'required|integer|min:1',
@@ -318,12 +377,29 @@ class PartRequestController extends Controller
             'items.*.qty.min'          => 'Quantity must be at least 1.',
         ]);
 
-        DB::transaction(function () use ($partRequest, $data) {
+        $hasAdditional = !empty($data['has_additional_machine']) || !empty($data['additional_machine_model_id']) || !empty($data['additional_machine_serial_no']);
+
+        $additionalModelName = $data['additional_machine_model'] ?? null;
+        $additionalMachineType = $data['additional_machine_type'] ?? null;
+        if (!empty($data['additional_machine_model_id'])) {
+            $foundModel = MachineModel::find($data['additional_machine_model_id']);
+            if ($foundModel) {
+                $additionalModelName = $additionalModelName ?: $foundModel->name;
+                $additionalMachineType = $additionalMachineType ?: $foundModel->machine_type_label;
+            }
+        }
+
+        DB::transaction(function () use ($partRequest, $data, $hasAdditional, $additionalModelName, $additionalMachineType) {
             $partRequest->update([
-                'ticket_id'         => $data['ticket_id'],
-                'machine_model_id'  => $data['machine_model_id'] ?? null,
-                'machine_serial_no' => $data['machine_serial_no'] ?? null,
-                'fault_description' => $data['fault_description'],
+                'ticket_id'                    => $data['ticket_id'],
+                'machine_model_id'             => $data['machine_model_id'] ?? null,
+                'machine_serial_no'            => $data['machine_serial_no'] ?? null,
+                'fault_description'            => $data['fault_description'],
+                'additional_machine_model_id'  => $hasAdditional ? (!empty($data['additional_machine_model_id']) ? (int) $data['additional_machine_model_id'] : null) : null,
+                'additional_machine_model'     => $hasAdditional ? $additionalModelName : null,
+                'additional_machine_serial_no' => $hasAdditional ? ($data['additional_machine_serial_no'] ?? null) : null,
+                'additional_machine_type'      => $hasAdditional ? $additionalMachineType : null,
+                'additional_fault_description' => $hasAdditional ? ($data['additional_fault_description'] ?? null) : null,
             ]);
 
             $partRequest->items()->delete();
@@ -608,6 +684,51 @@ class PartRequestController extends Controller
         return response()->download($path, $downloadName);
     }
 
+    public function streamAdditionalVideo(PartRequest $partRequest)
+    {
+        if (!$partRequest->additional_fault_video_path) {
+            abort(404, 'No additional machine video uploaded for this request.');
+        }
+
+        $path = Storage::disk('public')->path($partRequest->additional_fault_video_path);
+        if (!file_exists($path)) {
+            $altPath = public_path('storage/' . $partRequest->additional_fault_video_path);
+            if (file_exists($altPath)) {
+                $path = $altPath;
+            } else {
+                abort(404, 'Additional machine video file not found.');
+            }
+        }
+
+        $mime = mime_content_type($path) ?: 'video/mp4';
+        return response()->file($path, [
+            'Content-Type' => $mime,
+            'Accept-Ranges' => 'bytes',
+        ]);
+    }
+
+    public function downloadAdditionalVideo(PartRequest $partRequest)
+    {
+        if (!$partRequest->additional_fault_video_path) {
+            abort(404, 'No additional machine video uploaded for this request.');
+        }
+
+        $path = Storage::disk('public')->path($partRequest->additional_fault_video_path);
+        if (!file_exists($path)) {
+            $altPath = public_path('storage/' . $partRequest->additional_fault_video_path);
+            if (file_exists($altPath)) {
+                $path = $altPath;
+            } else {
+                abort(404, 'Additional machine video file not found.');
+            }
+        }
+
+        $extension = pathinfo($path, PATHINFO_EXTENSION) ?: 'mp4';
+        $downloadName = 'Additional_Machine_Video_' . $partRequest->request_number . '.' . $extension;
+
+        return response()->download($path, $downloadName);
+    }
+
     /**
      * Re-upload evidence & resubmit a rejected part request for Super Admin approval.
      */
@@ -699,10 +820,22 @@ class PartRequestController extends Controller
         }
 
         $request->validate([
-            'fault_video' => 'required|file|mimes:mp4,mov,avi,wmv,webm,mkv|max:102400',
+            'fault_video'            => 'nullable|file|mimes:mp4,mov,avi,wmv,webm,mkv|max:102400',
+            'additional_fault_video' => 'nullable|file|mimes:mp4,mov,avi,wmv,webm,mkv|max:102400',
+            'target_video'           => 'nullable|in:primary,additional',
         ]);
 
-        $videoPath = $request->file('fault_video')->store('part-requests/videos', 'public');
+        $target = $request->input('target_video', 'primary');
+        $isAdditional = ($target === 'additional' || $request->hasFile('additional_fault_video'));
+        $file = $isAdditional
+            ? ($request->file('additional_fault_video') ?? $request->file('fault_video'))
+            : ($request->file('fault_video') ?? $request->file('additional_fault_video'));
+
+        if (!$file) {
+            return back()->with('error', 'Please attach a valid video file.');
+        }
+
+        $videoPath = $file->store('part-requests/videos', 'public');
 
         try {
             $sourcePath = Storage::disk('public')->path($videoPath);
@@ -713,7 +846,35 @@ class PartRequestController extends Controller
             @copy($sourcePath, $publicTarget);
         } catch (\Throwable $e) {}
 
-        // Delete old video if different
+        if ($isAdditional) {
+            if ($partRequest->additional_fault_video_path && $partRequest->additional_fault_video_path !== $videoPath) {
+                try {
+                    Storage::disk('public')->delete($partRequest->additional_fault_video_path);
+                    $oldPublic = public_path('storage/' . $partRequest->additional_fault_video_path);
+                    if (file_exists($oldPublic)) {
+                        @unlink($oldPublic);
+                    }
+                } catch (\Throwable $e) {}
+            }
+
+            $partRequest->update([
+                'additional_fault_video_path' => $videoPath,
+            ]);
+
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Additional machine fault video updated successfully.',
+                    'path' => $videoPath,
+                    'stream_url' => route('parts.requests.additional-video', $partRequest),
+                    'download_url' => route('parts.requests.additional-video.download', $partRequest),
+                ]);
+            }
+
+            return back()->with('success', 'Additional machine diagnostic video updated successfully.');
+        }
+
+        // Primary machine video
         if ($partRequest->fault_video_path && $partRequest->fault_video_path !== $videoPath) {
             try {
                 Storage::disk('public')->delete($partRequest->fault_video_path);

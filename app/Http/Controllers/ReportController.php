@@ -339,6 +339,8 @@ class ReportController extends Controller
             $engineerTatMetrics = $engineers->map(function ($eng) use ($allTickets, $expenses) {
                 $engTickets = $allTickets->filter(fn($t) => (int)$t->assigned_engineer_id === $eng->id || (int)$t->original_field_engineer_id === $eng->id);
                 $totalAssigned = $engTickets->count();
+                $complaintsAssigned = $engTickets->filter(fn($t) => ($t->ticket_type ?? 'complaint') !== 'installation')->count();
+                $installationsAssigned = $engTickets->filter(fn($t) => ($t->ticket_type ?? 'complaint') === 'installation')->count();
 
                 $inTatResolved = 0;
                 $outTatResolved = 0;
@@ -378,6 +380,8 @@ class ReportController extends Controller
                     'base_city' => $eng->base_city ?? 'Lahore',
                     'phone' => $eng->phone_whatsapp ?? 'N/A',
                     'total_assigned' => $totalAssigned,
+                    'complaints_assigned' => $complaintsAssigned,
+                    'installations_assigned' => $installationsAssigned,
                     'resolved' => $totalResolved,
                     'in_tat_resolved' => $inTatResolved,
                     'out_tat_resolved' => $outTatResolved,

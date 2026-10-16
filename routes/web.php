@@ -84,11 +84,11 @@ Route::middleware('auth')->group(function () {
         Route::get('/{ticket}/document', [TicketController::class, 'viewSupportingDocument'])->name('document');
         Route::get('/{ticket}/document/download', [TicketController::class, 'downloadSupportingDocument'])->name('download-document');
         Route::get('/documents/{document}/download', [TicketController::class, 'downloadSpecificDocument'])->name('download-specific-document');
-        Route::post('/{ticket}/update-document', [TicketController::class, 'updateSupportingDocument'])->name('update-document');
         Route::post('/{ticket}/close', [TicketController::class, 'closeTicket'])->name('close');
         Route::post('/{ticket}/reopen', [TicketController::class, 'reopenTicket'])->name('reopen');
         Route::post('/{ticket}/request-approval', [ApprovalController::class, 'requestApproval'])->name('request-approval');
         Route::post('/{ticket}/grant-approval', [ApprovalController::class, 'grantApproval'])->name('grant-approval');
+        Route::get('/{ticket}/progress-modal', [TicketController::class, 'progressModal'])->name('progress-modal');
         Route::delete('/{ticket}', [TicketController::class, 'destroy'])->name('destroy');
     });
 
@@ -159,6 +159,8 @@ Route::middleware('auth')->group(function () {
             Route::post('/{partRequest}/dispatch', [PartRequestController::class, 'dispatch'])->name('dispatch');
             Route::get('/{partRequest}/video', [PartRequestController::class, 'streamVideo'])->name('video');
             Route::get('/{partRequest}/video/download', [PartRequestController::class, 'downloadVideo'])->name('video.download');
+            Route::get('/{partRequest}/additional-video', [PartRequestController::class, 'streamAdditionalVideo'])->name('additional-video');
+            Route::get('/{partRequest}/additional-video/download', [PartRequestController::class, 'downloadAdditionalVideo'])->name('additional-video.download');
             Route::post('/{partRequest}/update-video', [PartRequestController::class, 'updateVideo'])->name('video.update');
             Route::post('/{partRequest}/verify-faulty-return', [PartRequestController::class, 'verifyFaultyReturn'])->name('verify-faulty-return');
             Route::get('/{partRequest}/gate-pass', [PartRequestController::class, 'gatePass'])->name('gate-pass');

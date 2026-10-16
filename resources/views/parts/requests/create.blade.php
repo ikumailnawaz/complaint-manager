@@ -52,7 +52,7 @@
         </div>
     @endif
 
-    <form method="POST" action="{{ route('parts.requests.store') }}" id="partRequestForm">
+    <form method="POST" action="{{ route('parts.requests.store') }}" id="partRequestForm" enctype="multipart/form-data">
         @csrf
 
         {{-- Section 1: Ticket & Machine --}}
@@ -103,7 +103,7 @@
                             <option value="{{ $m->id }}"
                                 data-name="{{ strtolower($m->name) }}"
                                 {{ $modelMatch ? 'selected' : '' }}>
-                                {{ $m->name }} ({{ strtoupper($m->machine_type) }})
+                                {{ $m->name }} ({{ $m->machine_type_label }})
                             </option>
                         @endforeach
                     </select>
@@ -132,6 +132,60 @@
                     @error('machine_serial_no')
                         <p class="text-[10px] text-rose-500 mt-1">{{ $message }}</p>
                     @enderror
+                </div>
+            </div>
+
+            {{-- Optional Additional Broken Machine at Same Site --}}
+            <div class="mt-5 pt-4 border-t border-slate-100">
+                <div class="flex items-center justify-between mb-2">
+                    <label class="flex items-center space-x-2 text-xs font-bold text-slate-800 cursor-pointer">
+                        <input type="checkbox" name="has_additional_machine" id="hasAdditionalMachineToggle" value="1"
+                               {{ old('has_additional_machine') ? 'checked' : '' }}
+                               class="rounded text-indigo-600 focus:ring-indigo-400"
+                               onchange="document.getElementById('additionalMachineBox').classList.toggle('hidden', !this.checked)">
+                        <span class="flex items-center space-x-1.5 text-indigo-900 font-bold">
+                            <i class="fa-solid fa-plus-circle text-indigo-600"></i>
+                            <span>Request parts for additional broken machine at this branch / site</span>
+                        </span>
+                    </label>
+                    <span class="text-[10px] text-indigo-700 bg-indigo-50 border border-indigo-200 px-2.5 py-0.5 rounded-full font-bold">
+                        Single Visit &bull; Shared Tour
+                    </span>
+                </div>
+                <p class="text-[11px] text-slate-500 mb-3">
+                    If another machine at this branch broke down during your visit, you can request parts for both machines together. If office staff assigns another complaint ticket for it, your tour remains one-time and you can claim expenses for both machines.
+                </p>
+
+                <div id="additionalMachineBox" class="{{ old('has_additional_machine') ? '' : 'hidden' }} bg-indigo-50/50 border border-indigo-200 rounded-xl p-4 space-y-3">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div>
+                            <label class="text-xs font-semibold text-slate-700">Additional Machine Model</label>
+                            <select name="additional_machine_model_id" class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-xs bg-white focus:ring-2 focus:ring-indigo-400">
+                                <option value="">-- Select Additional Model --</option>
+                                @foreach($models as $m)
+                                    <option value="{{ $m->id }}" {{ old('additional_machine_model_id') == $m->id ? 'selected' : '' }}>
+                                        {{ $m->name }} ({{ $m->machine_type_label }})
+                                    </option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div>
+                            <label class="text-xs font-semibold text-slate-700">Additional Machine Serial #</label>
+                            <input type="text" name="additional_machine_serial_no" value="{{ old('additional_machine_serial_no') }}" placeholder="e.g. SN-88210" class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-xs bg-white font-mono focus:ring-2 focus:ring-indigo-400">
+                        </div>
+                        <div>
+                            <label class="text-xs font-semibold text-slate-700">Additional Machine Type</label>
+                            <input type="text" name="additional_machine_type" value="{{ old('additional_machine_type') }}" placeholder="e.g. Shrink Wrapping Machine / Sorter" class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-xs bg-white focus:ring-2 focus:ring-indigo-400">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="text-xs font-semibold text-slate-700">Additional Machine Fault Notes</label>
+                        <input type="text" name="additional_fault_description" value="{{ old('additional_fault_description') }}" placeholder="Describe secondary machine issue..." class="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-xs bg-white focus:ring-2 focus:ring-indigo-400">
+                    </div>
+                    <div>
+                        <label class="text-xs font-semibold text-slate-700">Diagnostic Video for Additional Machine (Optional, can upload later before approval)</label>
+                        <input type="file" name="additional_fault_video" accept="video/*" class="mt-1 w-full text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-100 file:text-indigo-800 hover:file:bg-indigo-200">
+                    </div>
                 </div>
             </div>
         </div>

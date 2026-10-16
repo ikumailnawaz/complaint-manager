@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\InboxEmail;
+use App\Models\MachineModel;
 use App\Models\Ticket;
 use App\Models\TicketFeedback;
 use App\Models\TicketLog;
@@ -77,6 +78,10 @@ class TicketController extends Controller
             $query->where('branch_location', 'like', "%{$request->location}%");
         }
 
+        if ($request->filled('ticket_type')) {
+            $query->where('ticket_type', $request->ticket_type);
+        }
+
         // Date Range Filters
         if ($request->filled('from_date')) {
             $query->whereDate('created_at', '>=', $request->from_date);
@@ -141,6 +146,10 @@ class TicketController extends Controller
 
     public function index(Request $request)
     {
+        if (Auth::user()?->isOfficeStaff()) {
+            return redirect()->route('tickets.open');
+        }
+
         $query = Ticket::with(['engineer', 'assignedBy', 'activeTicketEngineers'])->latest();
 
         // Filters
@@ -162,6 +171,10 @@ class TicketController extends Controller
 
         if ($request->filled('unassigned')) {
             $query->whereNull('assigned_engineer_id');
+        }
+
+        if ($request->filled('ticket_type')) {
+            $query->where('ticket_type', $request->ticket_type);
         }
 
         // Date Range Filters
@@ -216,7 +229,51 @@ class TicketController extends Controller
         }
 
         $engineers = User::where('role', 'engineer')->where('is_available', true)->get();
-        return view('tickets.create', compact('engineers'));
+
+        $dbTypes = MachineModel::whereNotNull('machine_type')
+            ->where('machine_type', '!=', '')
+            ->distinct()
+            ->pluck('machine_type')
+            ->toArray();
+
+        $ticketTypes = Ticket::whereNotNull('machine_type')
+            ->where('machine_type', '!=', '')
+            ->distinct()
+            ->pluck('machine_type')
+            ->toArray();
+
+        $defaults = [
+            'Cash Sorting Machine',
+            'Cash Counting Machine',
+            'Cash Binding Machine',
+            'Shrink Wrapping Machine',
+            'ATM',
+            'CDM',
+            'POS',
+            'Kiosk',
+            'Other Equipment',
+        ];
+
+        $machineTypes = collect(array_merge($defaults, $dbTypes, $ticketTypes))
+            ->map(function ($type) {
+                $trimmed = trim($type);
+                return match (strtolower($trimmed)) {
+                    'atm' => 'ATM',
+                    'cdm' => 'CDM',
+                    'pos' => 'POS',
+                    'shrink wrap machine', 'shrink_wrap', 'shrink wrapping machine' => 'Shrink Wrapping Machine',
+                    'counting machine', 'cash counting machine' => 'Cash Counting Machine',
+                    'binding machine', 'cash binding machine' => 'Cash Binding Machine',
+                    'sorting machine', 'cash sorting machine' => 'Cash Sorting Machine',
+                    'other' => 'Other Equipment',
+                    default => $trimmed,
+                };
+            })
+            ->filter()
+            ->unique(fn ($item) => strtolower($item))
+            ->values();
+
+        return view('tickets.create', compact('engineers', 'machineTypes'));
     }
 
     public function store(Request $request)
@@ -228,6 +285,8 @@ class TicketController extends Controller
         $validated = $request->validate([
             'ticket_no_type' => 'required|in:auto,manual',
             'custom_ticket_no' => 'nullable|string|max:50',
+            'ticket_type' => 'nullable|in:complaint,installation',
+            'is_installation' => 'nullable|boolean',
             'bank_name' => 'required|string|max:100',
             'branch_name' => 'nullable|string|max:100',
             'branch_location' => 'required|string|max:100',
@@ -245,6 +304,10 @@ class TicketController extends Controller
             'issue_description' => 'nullable|string',
             'assigned_engineer_id' => 'nullable|exists:users,id',
         ]);
+
+        $ticketType = ($request->boolean('is_installation') || ($validated['ticket_type'] ?? '') === 'installation')
+            ? 'installation'
+            : 'complaint';
 
         // Generate Ticket No or use bank email reference
         if ($validated['ticket_no_type'] === 'manual' && !empty($validated['custom_ticket_no'])) {
@@ -278,6 +341,7 @@ class TicketController extends Controller
         $ticket = Ticket::create([
             'ticket_no' => $ticketNo,
             'ticket_no_source' => $ticketSource,
+            'ticket_type' => $ticketType,
             'customer_ref_no' => $validated['custom_ticket_no'] ?? null,
             'bank_name' => $validated['bank_name'],
             'branch_name' => $validated['branch_name'] ?? null,
@@ -1561,5 +1625,95 @@ class TicketController extends Controller
         ]);
 
         return back()->with('success', "Directive logged to ticket audit trail and flagged for engineer attention.");
+    }
+
+    /**
+     * Return visual progress & audit breakdown for naked-eye understanding.
+     */
+    public function progressModal(Ticket $ticket)
+    {
+        $ticket->load([
+            'engineer',
+            'assignedBy',
+            'workshopEngineer',
+            'workshopIncharge',
+            'workshopReceivedBy',
+            'feedbacks.engineer',
+            'partRequests.items.part',
+            'logs.user',
+            'activeTicketEngineers.engineer',
+        ]);
+
+        $now = Carbon::now();
+        $createdAt = $ticket->created_at ?? $now;
+        $resolvedAt = $ticket->resolved_at ?? ($ticket->status === 'closed' ? $ticket->updated_at : null);
+        $effectiveEnd = $resolvedAt ?? $now;
+
+        // Total Elapsed Age
+        $totalElapsedHours = round($createdAt->diffInMinutes($effectiveEnd) / 60, 1);
+        $totalDays = floor($totalElapsedHours / 24);
+        $totalRemHours = round($totalElapsedHours - ($totalDays * 24), 1);
+
+        // Alignment Time
+        $assignedAt = $ticket->assigned_at;
+        $assignmentHours = $assignedAt ? round($createdAt->diffInMinutes($assignedAt) / 60, 1) : null;
+
+        // Waiting for Approval Time
+        $approvalRequestedAt = $ticket->approval_requested_at ?? $ticket->sla_paused_at;
+        $approvalArrivedAt = $ticket->approval_arrived_at;
+        $approvalWaitHours = 0.0;
+        $isAwaitingApprovalNow = ($ticket->status === 'awaiting_approval');
+        if ($approvalRequestedAt) {
+            $endApproval = $approvalArrivedAt ?? ($isAwaitingApprovalNow ? $now : $approvalRequestedAt);
+            $approvalWaitHours = round($approvalRequestedAt->diffInMinutes($endApproval) / 60, 1);
+        } elseif ($ticket->approval_paused_seconds > 0) {
+            $approvalWaitHours = round($ticket->approval_paused_seconds / 3600, 1);
+        }
+
+        // Workshop In-Transit Time
+        $workshopDispatchAt = $ticket->workshop_dispatched_at;
+        $workshopReceivedAt = $ticket->workshop_received_at;
+        $workshopTransitHours = null;
+        if ($workshopDispatchAt) {
+            $endTransit = $workshopReceivedAt ?? ($ticket->status === 'awaiting_workshop' ? $now : $workshopDispatchAt);
+            $workshopTransitHours = round($workshopDispatchAt->diffInMinutes($endTransit) / 60, 1);
+        }
+
+        // Workshop Bench Repair Time
+        $workshopRepairedAt = $ticket->workshop_repaired_at;
+        $benchRepairHours = null;
+        if ($workshopReceivedAt) {
+            $endBench = $workshopRepairedAt ?? ($ticket->status === 'in_workshop_repair' ? $now : $workshopReceivedAt);
+            $benchRepairHours = round($workshopReceivedAt->diffInMinutes($endBench) / 60, 1);
+        }
+
+        // Return Transit Time
+        $returnDispatchedAt = $ticket->return_dispatched_at;
+        $bankReceivedAt = $ticket->bank_received_at;
+        $returnTransitHours = null;
+        if ($returnDispatchedAt) {
+            $endReturn = $bankReceivedAt ?? ($ticket->status === 'return_transit' ? $now : $returnDispatchedAt);
+            $returnTransitHours = round($returnDispatchedAt->diffInMinutes($endReturn) / 60, 1);
+        }
+
+        // Net Active Working Hours (Excluding SLA paused period)
+        $netActiveHours = max(0.1, round($totalElapsedHours - $approvalWaitHours, 1));
+
+        $feedbacks = $ticket->feedbacks->sortBy('created_at');
+
+        return view('tickets.partials.progress-modal-content', compact(
+            'ticket',
+            'totalElapsedHours',
+            'totalDays',
+            'totalRemHours',
+            'assignmentHours',
+            'approvalWaitHours',
+            'isAwaitingApprovalNow',
+            'workshopTransitHours',
+            'benchRepairHours',
+            'returnTransitHours',
+            'netActiveHours',
+            'feedbacks'
+        ));
     }
 }

@@ -64,6 +64,7 @@ class Ticket extends Model
     protected $fillable = [
         'ticket_no',
         'ticket_no_source',
+        'ticket_type',
         'customer_ref_no',
         'bank_name',
         'branch_name',
@@ -212,6 +213,41 @@ class Ticket extends Model
 
         $clean = preg_replace('/[^A-Z0-9]/', '', $b);
         return substr($clean, 0, 6) ?: 'BANK';
+    }
+
+    public function isInstallation(): bool
+    {
+        return ($this->ticket_type ?? 'complaint') === 'installation';
+    }
+
+    public function isComplaint(): bool
+    {
+        return !$this->isInstallation();
+    }
+
+    public function getTicketTypeBadge(): array
+    {
+        if ($this->isInstallation()) {
+            return [
+                'type'  => 'installation',
+                'label' => 'New Machine Installation',
+                'short' => 'Installation',
+                'icon'  => 'fa-solid fa-screwdriver-wrench',
+                'bg'    => 'bg-purple-100',
+                'text'  => 'text-purple-800',
+                'border'=> 'border-purple-300',
+            ];
+        }
+
+        return [
+            'type'  => 'complaint',
+            'label' => 'Complaint / Repair',
+            'short' => 'Complaint',
+            'icon'  => 'fa-solid fa-triangle-exclamation',
+            'bg'    => 'bg-amber-50',
+            'text'  => 'text-amber-800',
+            'border'=> 'border-amber-200',
+        ];
     }
 
     /**

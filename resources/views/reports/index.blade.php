@@ -350,7 +350,14 @@
                                     </div>
                                 </td>
                                 <td class="py-3 px-4 text-slate-600 font-semibold">{{ $eng['base_city'] }}</td>
-                                <td class="py-3 px-4 text-center font-bold text-slate-800">{{ $eng['total_assigned'] }}</td>
+                                <td class="py-3 px-4 text-center">
+                                    <div class="font-bold text-slate-800">{{ $eng['total_assigned'] }}</div>
+                                    <div class="text-[10px] text-slate-500 font-medium whitespace-nowrap mt-0.5">
+                                        <span class="text-amber-700 font-bold" title="Complaints">{{ $eng['complaints_assigned'] }} Cmp</span>
+                                        <span class="text-slate-300 mx-0.5">&bull;</span>
+                                        <span class="text-purple-700 font-extrabold" title="Installations">{{ $eng['installations_assigned'] }} Inst</span>
+                                    </div>
+                                </td>
                                 <td class="py-3 px-4 text-center text-emerald-700 font-bold">{{ $eng['resolved'] }}</td>
                                 <td class="py-3 px-4 text-center">
                                     <span class="px-2 py-0.5 rounded-full text-[10px] font-bold {{ $eng['tat_compliance_rate'] >= 80 ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800' }}">
@@ -1199,7 +1206,14 @@
                                     </a>
                                 </td>
                                 <td class="py-3 px-4 font-semibold text-slate-600">{{ $eng['base_city'] }}</td>
-                                <td class="py-3 px-4 text-center font-bold text-slate-800">{{ $eng['total_assigned'] }}</td>
+                                <td class="py-3 px-4 text-center">
+                                    <div class="font-bold text-slate-800">{{ $eng['total_assigned'] }}</div>
+                                    <div class="text-[10px] text-slate-500 font-medium whitespace-nowrap mt-0.5">
+                                        <span class="text-amber-700 font-bold" title="Complaints">{{ $eng['complaints_assigned'] }} Cmp</span>
+                                        <span class="text-slate-300 mx-0.5">&bull;</span>
+                                        <span class="text-purple-700 font-extrabold" title="Installations">{{ $eng['installations_assigned'] }} Inst</span>
+                                    </div>
+                                </td>
                                 <td class="py-3 px-4 text-center">
                                     <span class="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300">
                                         {{ $eng['in_tat_resolved'] }} In-TAT

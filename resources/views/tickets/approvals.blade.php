@@ -35,7 +35,7 @@
     </div>
 
     <!-- STATS TILES -->
-    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <!-- 1. Total On Hold -->
         <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
             <div class="flex items-center justify-between text-xs font-bold text-slate-500">
@@ -56,7 +56,21 @@
             <div class="text-[10px] text-slate-400 mt-0.5 font-medium">May require escalation with bank</div>
         </div>
 
-        <!-- 3. Distinct Banks -->
+        <!-- 3. Paused > 48h Critical -->
+        <div class="bg-white p-4 rounded-xl border {{ ($stats['paused_over_48h'] ?? 0) > 0 ? 'border-red-400 ring-2 ring-red-400 bg-red-50/30' : 'border-slate-200' }} shadow-sm">
+            <div class="flex items-center justify-between text-xs font-bold {{ ($stats['paused_over_48h'] ?? 0) > 0 ? 'text-red-700' : 'text-slate-500' }}">
+                <span>Paused &gt; 48 Hours</span>
+                <i class="fa-solid fa-triangle-exclamation {{ ($stats['paused_over_48h'] ?? 0) > 0 ? 'text-red-600 animate-pulse' : 'text-slate-400' }}"></i>
+            </div>
+            <div class="text-2xl font-black {{ ($stats['paused_over_48h'] ?? 0) > 0 ? 'text-red-600 animate-pulse' : 'text-slate-800' }} mt-1.5 font-mono">
+                {{ $stats['paused_over_48h'] ?? 0 }}
+            </div>
+            <div class="text-[10px] {{ ($stats['paused_over_48h'] ?? 0) > 0 ? 'text-red-600 font-bold' : 'text-slate-400' }} mt-0.5">
+                {{ ($stats['paused_over_48h'] ?? 0) > 0 ? '⚠️ Attention Required: Contact Bank' : 'No critical >48h pending' }}
+            </div>
+        </div>
+
+        <!-- 4. Distinct Banks -->
         <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
             <div class="flex items-center justify-between text-xs font-bold text-slate-500">
                 <span>Institutions Pending</span>
@@ -125,14 +139,25 @@
                         $slaHealth = $ticket->getSlaHealth();
                         $pausedSince = $ticket->sla_paused_at ?? $ticket->approval_requested_at;
                         $pausedDuration = $pausedSince ? $pausedSince->diffForHumans(now(), ['parts' => 2, 'syntax' => \Carbon\CarbonInterface::DIFF_ABSOLUTE]) : 'Just now';
+                        $hoursWaiting = $pausedSince ? (int) $pausedSince->diffInHours(now()) : 0;
+                        $daysWaiting = floor($hoursWaiting / 24);
+                        $remHours = $hoursWaiting % 24;
+                        $waitingElapsedReadable = $daysWaiting > 0 ? "{$daysWaiting}d {$remHours}h" : "{$hoursWaiting}h";
+                        $isCriticalOver48h = $hoursWaiting >= 48;
                     @endphp
-                    <div class="p-4 sm:p-5 hover:bg-slate-50/80 transition flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                    <div class="p-4 sm:p-5 hover:bg-slate-50/80 transition flex flex-col lg:flex-row lg:items-center justify-between gap-4 {{ $isCriticalOver48h ? 'border-l-4 border-l-red-600 bg-red-50/25' : '' }}">
                         <!-- Left Details -->
                         <div class="space-y-2 flex-1 min-w-0">
                             <div class="flex flex-wrap items-center gap-2">
                                 <a href="{{ route('tickets.show', $ticket) }}" class="font-mono font-bold text-sm text-sky-600 hover:underline">
                                     #{{ $ticket->ticket_no }}
                                 </a>
+                                @if($isCriticalOver48h)
+                                    <span class="px-2.5 py-1 rounded-full text-xs font-black bg-red-600 text-white animate-pulse inline-flex items-center space-x-1.5 shadow-sm shadow-red-500/30">
+                                        <i class="fa-solid fa-triangle-exclamation text-yellow-300"></i>
+                                        <span>⚠️ Attention Required: Contact Bank (&gt;48h Pending: {{ $waitingElapsedReadable }})</span>
+                                    </span>
+                                @endif
                                 <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
                                     <i class="fa-solid fa-pause text-[9px] mr-1"></i>SLA Paused ({{ $pausedDuration }})
                                 </span>
@@ -155,9 +180,9 @@
                             </div>
 
                             <!-- Reason Box -->
-                            <div class="bg-amber-50/70 border border-amber-200/80 rounded-xl p-3 text-xs text-amber-950">
-                                <div class="flex items-center space-x-1.5 font-bold text-[11px] text-amber-800 mb-1">
-                                    <i class="fa-solid fa-triangle-exclamation text-amber-600"></i>
+                            <div class="bg-amber-50/70 border {{ $isCriticalOver48h ? 'border-red-300 bg-red-50/40' : 'border-amber-200/80' }} rounded-xl p-3 text-xs text-amber-950">
+                                <div class="flex items-center space-x-1.5 font-bold text-[11px] {{ $isCriticalOver48h ? 'text-red-800' : 'text-amber-800' }} mb-1">
+                                    <i class="fa-solid {{ $isCriticalOver48h ? 'fa-triangle-exclamation text-red-600' : 'fa-triangle-exclamation text-amber-600' }}"></i>
                                     <span>Approval Requirement / Reason:</span>
                                 </div>
                                 <p class="text-slate-700 italic leading-relaxed">
@@ -168,7 +193,10 @@
                                         <i class="fa-solid fa-user-pen mr-1 text-slate-400"></i>Requested by: <strong>{{ $ticket->approvalRequestedBy?->name ?? 'Engineer' }}</strong>
                                     </span>
                                     <span>
-                                        <i class="fa-regular fa-clock mr-1 text-slate-400"></i>Paused at: <strong>{{ $ticket->sla_paused_at?->format('d M Y, h:i A') ?? 'N/A' }}</strong>
+                                        <i class="fa-regular fa-clock mr-1 text-slate-400"></i>Paused at: <strong>{{ $pausedSince?->format('d M Y, h:i A') ?? 'N/A' }}</strong>
+                                    </span>
+                                    <span>
+                                        <i class="fa-solid fa-stopwatch mr-1 {{ $isCriticalOver48h ? 'text-red-500' : 'text-amber-500' }}"></i>Waiting till now: <strong class="{{ $isCriticalOver48h ? 'text-red-700 font-extrabold' : 'text-slate-900 font-bold' }}">{{ $pausedDuration }} ({{ $waitingElapsedReadable }})</strong>
                                     </span>
                                     @if($ticket->engineer)
                                         <span>
@@ -176,6 +204,16 @@
                                         </span>
                                     @endif
                                 </div>
+
+                                @if($isCriticalOver48h)
+                                    <div class="mt-2.5 p-2.5 rounded-lg bg-red-600 text-white flex items-center justify-between text-xs animate-pulse shadow-md shadow-red-500/20">
+                                        <div class="flex items-center space-x-2 font-black">
+                                            <i class="fa-solid fa-triangle-exclamation text-yellow-300 text-sm shrink-0"></i>
+                                            <span>⚠️ Attention Required: Contact Bank &bull; Approval has been pending for {{ $waitingElapsedReadable }} (exceeds 48h limit).</span>
+                                        </div>
+                                        <span class="text-[10px] uppercase font-black bg-white/20 px-2 py-0.5 rounded">Critical</span>
+                                    </div>
+                                @endif
                             </div>
                         </div>
 

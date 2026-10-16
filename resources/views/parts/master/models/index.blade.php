@@ -43,13 +43,18 @@
                                     <div>
                                         <div class="flex items-center space-x-2">
                                             <h3 class="text-sm font-bold text-slate-900">{{ $model->name }}</h3>
-                                            @if(!empty($model->machine_type) && strtolower($model->machine_type) !== 'atm')
+                                            @if(!empty($model->machine_type))
                                                 <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase
-                                                    {{ $model->machine_type === 'cdm' ? 'bg-purple-100 text-purple-800' : '' }}
-                                                    {{ $model->machine_type === 'pos' ? 'bg-emerald-100 text-emerald-800' : '' }}
-                                                    {{ $model->machine_type === 'kiosk' ? 'bg-amber-100 text-amber-800' : '' }}
-                                                    {{ $model->machine_type === 'other' ? 'bg-slate-100 text-slate-800' : '' }}">
-                                                    {{ strtoupper($model->machine_type) }}
+                                                    {{ in_array(strtolower($model->machine_type), ['atm']) ? 'bg-sky-100 text-sky-800 border border-sky-200' : '' }}
+                                                    {{ in_array(strtolower($model->machine_type), ['cdm']) ? 'bg-purple-100 text-purple-800 border border-purple-200' : '' }}
+                                                    {{ in_array(strtolower($model->machine_type), ['pos']) ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : '' }}
+                                                    {{ in_array(strtolower($model->machine_type), ['kiosk']) ? 'bg-amber-100 text-amber-800 border border-amber-200' : '' }}
+                                                    {{ str_contains(strtolower($model->machine_type), 'sorting') ? 'bg-indigo-100 text-indigo-800 border border-indigo-200' : '' }}
+                                                    {{ str_contains(strtolower($model->machine_type), 'counting') ? 'bg-teal-100 text-teal-800 border border-teal-200' : '' }}
+                                                    {{ str_contains(strtolower($model->machine_type), 'binding') ? 'bg-orange-100 text-orange-800 border border-orange-200' : '' }}
+                                                    {{ str_contains(strtolower($model->machine_type), 'shrink') ? 'bg-fuchsia-100 text-fuchsia-800 border border-fuchsia-200' : '' }}
+                                                    {{ in_array(strtolower($model->machine_type), ['other']) ? 'bg-slate-100 text-slate-800 border border-slate-200' : '' }}">
+                                                    {{ $model->machine_type_label }}
                                                 </span>
                                             @endif
                                         </div>
@@ -175,11 +180,15 @@
                             Machine Type <span class="text-rose-500">*</span>
                         </label>
                         <select name="machine_type" required class="w-full text-xs rounded-lg border-slate-300 focus:border-sky-500 focus:ring-sky-500 shadow-sm">
-                            <option value="atm">ATM (Automated Teller Machine)</option>
-                            <option value="cdm">CDM (Cash Deposit Machine)</option>
-                            <option value="pos">POS (Point of Sale Terminal)</option>
-                            <option value="kiosk">Self-Service Kiosk</option>
-                            <option value="other">Other Terminal</option>
+                            <option value="Cash Sorting Machine">Cash Sorting Machine</option>
+                            <option value="Cash Counting Machine">Cash Counting Machine</option>
+                            <option value="Cash Binding Machine">Cash Binding Machine</option>
+                            <option value="Shrink Wrapping Machine">Shrink Wrapping Machine</option>
+                            <option value="ATM">ATM (Automated Teller Machine)</option>
+                            <option value="CDM">CDM (Cash Deposit Machine)</option>
+                            <option value="POS">POS (Point of Sale Terminal)</option>
+                            <option value="Kiosk">Self-Service Kiosk</option>
+                            <option value="Other">Other Equipment / Terminal</option>
                         </select>
                     </div>
 

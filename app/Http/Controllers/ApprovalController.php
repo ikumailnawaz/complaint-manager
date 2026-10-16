@@ -56,6 +56,13 @@ class ApprovalController extends Controller
             'paused_over_24h'   => Ticket::where('status', 'awaiting_approval')
                 ->where('sla_paused_at', '<=', Carbon::now()->subDay())
                 ->count(),
+            'paused_over_48h'   => Ticket::where('status', 'awaiting_approval')
+                ->where(function ($q) {
+                    $q->where('sla_paused_at', '<=', Carbon::now()->subDays(2))
+                      ->orWhere(function ($sub) {
+                          $sub->whereNull('sla_paused_at')->where('approval_requested_at', '<=', Carbon::now()->subDays(2));
+                      });
+                })->count(),
         ];
 
         return view('tickets.approvals', compact('tickets', 'stats'));

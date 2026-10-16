@@ -14,6 +14,15 @@
             <div>
                 <div class="flex items-center space-x-2">
                     <h1 class="text-xl font-extrabold text-slate-900 tracking-tight">{{ $ticket->ticket_no }}</h1>
+                    @if($ticket->isInstallation())
+                        <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-purple-100 text-purple-800 border border-purple-200">
+                            <i class="fa-solid fa-screwdriver-wrench mr-1"></i> New Installation
+                        </span>
+                    @else
+                        <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-slate-100 text-slate-700 border border-slate-200">
+                            <i class="fa-solid fa-triangle-exclamation mr-1"></i> Complaint
+                        </span>
+                    @endif
                     <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase
                         {{ $ticket->urgency === 'high' ? 'bg-rose-100 text-rose-800 border border-rose-200' : '' }}
                         {{ $ticket->urgency === 'medium' ? 'bg-amber-100 text-amber-800 border border-amber-200' : '' }}
@@ -89,6 +98,15 @@
                 @else
                     <span class="text-slate-400 font-medium">Not Sent</span>
                 @endif
+            </div>
+
+            <div class="border-l border-slate-200 pl-3">
+                <button type="button" 
+                        onclick="openViewProgressModal({{ $ticket->id }})" 
+                        class="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg shadow-sm transition active:scale-95 cursor-pointer">
+                    <i class="fa-solid fa-chart-line"></i>
+                    <span>View Progress</span>
+                </button>
             </div>
 
             @if(!auth()->user()->isEngineer())
@@ -2469,6 +2487,7 @@
 @include('tickets.partials.mark-complete-modal')
 @include('tickets.partials.claim-expense-modal')
 @include('tickets.partials.approval-modals')
+@include('tickets.partials.progress-modal')
 @if(!auth()->user()->isEngineer())
     @include('tickets.partials.send-resolution-email-modal')
     @include('tickets.partials.reopen-modal')

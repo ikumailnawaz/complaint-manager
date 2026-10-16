@@ -1253,6 +1253,8 @@ class MobileApiController extends Controller
         }
 
         $pr = \Illuminate\Support\Facades\DB::transaction(function () use ($request, $user, $ticket) {
+            $hasAdditional = !empty($request->has_additional_machine) || !empty($request->additional_machine_model_id) || !empty($request->additional_machine_serial_no);
+
             $pr = PartRequest::create([
                 'request_number'    => PartRequest::generateRequestNumber(),
                 'ticket_id'         => $ticket->id,
@@ -1260,6 +1262,11 @@ class MobileApiController extends Controller
                 'machine_model_id'  => $request->machine_model_id ?: null,
                 'machine_serial_no' => $request->machine_serial_no ?: $ticket->machine_serial_no,
                 'fault_description' => $request->fault_description,
+                'additional_machine_model_id'  => $hasAdditional ? ($request->additional_machine_model_id ?: null) : null,
+                'additional_machine_model'     => $hasAdditional ? ($request->additional_machine_model ?: null) : null,
+                'additional_machine_serial_no' => $hasAdditional ? ($request->additional_machine_serial_no ?: null) : null,
+                'additional_machine_type'      => $hasAdditional ? ($request->additional_machine_type ?: null) : null,
+                'additional_fault_description' => $hasAdditional ? ($request->additional_fault_description ?: null) : null,
                 'status'            => 'pending_stock_check',
             ]);
 

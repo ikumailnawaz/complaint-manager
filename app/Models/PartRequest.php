@@ -10,6 +10,8 @@ class PartRequest extends Model {
     protected $fillable = [
         'request_number', 'ticket_id', 'cycle_id', 'engineer_id', 'machine_model_id', 'machine_serial_no',
         'fault_description', 'status', 'fault_video_path',
+        'additional_machine_model_id', 'additional_machine_model', 'additional_machine_serial_no',
+        'additional_machine_type', 'additional_fault_description', 'additional_fault_video_path',
         'stock_verified_by_id', 'stock_verified_at', 'stock_remarks',
         'approved_by_id', 'approved_at', 'approval_remarks',
         'rejected_by_id', 'rejected_at', 'rejection_reason',
@@ -27,6 +29,10 @@ class PartRequest extends Model {
     public function ticket(): BelongsTo { return $this->belongsTo(Ticket::class); }
     public function engineer(): BelongsTo { return $this->belongsTo(User::class, 'engineer_id'); }
     public function machineModel(): BelongsTo { return $this->belongsTo(MachineModel::class); }
+    public function additionalMachineModel(): BelongsTo { return $this->belongsTo(MachineModel::class, 'additional_machine_model_id'); }
+    public function hasAdditionalMachine(): bool {
+        return !empty($this->additional_machine_model) || !empty($this->additional_machine_model_id) || !empty($this->additional_machine_serial_no);
+    }
     public function stockVerifiedBy(): BelongsTo { return $this->belongsTo(User::class, 'stock_verified_by_id'); }
     public function approvedBy(): BelongsTo { return $this->belongsTo(User::class, 'approved_by_id'); }
     public function rejectedBy(): BelongsTo { return $this->belongsTo(User::class, 'rejected_by_id'); }

@@ -188,6 +188,91 @@
         </div>
     </div>
 
+    {{-- Additional Machine at Same Site --}}
+    @if($partRequest->hasAdditionalMachine())
+        <div class="bg-gradient-to-r from-indigo-50/80 via-white to-purple-50/80 rounded-xl shadow-xs border border-indigo-200 p-5 mb-5">
+            <div class="flex flex-wrap items-center justify-between gap-2 mb-3 pb-2 border-b border-indigo-100">
+                <div class="flex items-center space-x-2">
+                    <span class="w-7 h-7 rounded-lg bg-indigo-600 text-white flex items-center justify-center text-xs font-bold shadow-xs">
+                        <i class="fa-solid fa-screwdriver-wrench"></i>
+                    </span>
+                    <div>
+                        <h4 class="text-sm font-extrabold text-indigo-950">Additional Broken Machine at Site (Shared Visit)</h4>
+                        <p class="text-[11px] text-indigo-600">Parts requested simultaneously during the same on-site visit</p>
+                    </div>
+                </div>
+                <span class="px-2.5 py-1 rounded-full text-xs font-extrabold bg-indigo-100 text-indigo-900 border border-indigo-300">
+                    <i class="fa-solid fa-route mr-1"></i> Shared Tour &bull; Expense Claimable for Both
+                </span>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs mb-3">
+                <div class="p-3 bg-white/80 rounded-lg border border-indigo-100">
+                    <span class="text-slate-400 block text-[10px] uppercase font-bold">Additional Machine Model</span>
+                    <strong class="text-slate-800 text-sm">{{ $partRequest->additionalMachineModel?->name ?? $partRequest->additional_machine_model ?? 'Specified Model' }}</strong>
+                </div>
+                <div class="p-3 bg-white/80 rounded-lg border border-indigo-100">
+                    <span class="text-slate-400 block text-[10px] uppercase font-bold">Machine Serial Number</span>
+                    <strong class="font-mono text-slate-800 text-sm">{{ $partRequest->additional_machine_serial_no ?? 'N/A' }}</strong>
+                </div>
+                <div class="p-3 bg-white/80 rounded-lg border border-indigo-100">
+                    <span class="text-slate-400 block text-[10px] uppercase font-bold">Machine Equipment Type</span>
+                    <strong class="text-slate-800 text-sm">{{ $partRequest->additional_machine_type ?? 'Equipment' }}</strong>
+                </div>
+            </div>
+
+            @if($partRequest->additional_fault_description)
+                <div class="p-3 bg-white/80 rounded-lg border border-indigo-100 text-xs mb-3">
+                    <span class="text-slate-500 font-bold block mb-0.5">Additional Machine Fault Notes:</span>
+                    <p class="text-slate-700 italic">{{ $partRequest->additional_fault_description }}</p>
+                </div>
+            @endif
+
+            {{-- Video Evidence for Additional Machine --}}
+            <div class="pt-3 border-t border-indigo-100 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                    <span class="text-xs font-bold text-indigo-900 flex items-center gap-1.5">
+                        <i class="fa-solid fa-video text-indigo-600"></i> Additional Machine Diagnostic Video
+                    </span>
+                    @if($partRequest->additional_fault_video_path)
+                        <span class="text-[11px] text-slate-500 block font-mono">{{ basename($partRequest->additional_fault_video_path) }}</span>
+                    @else
+                        <span class="text-[11px] text-slate-400 block italic">No video uploaded yet for additional machine.</span>
+                    @endif
+                </div>
+
+                <div class="flex items-center gap-2">
+                    @if($partRequest->additional_fault_video_path)
+                        <a href="{{ route('parts.requests.additional-video', $partRequest) }}" target="_blank"
+                           class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-xs font-semibold transition">
+                            <i class="fas fa-up-right-from-square"></i> Open Video
+                        </a>
+                        <a href="{{ route('parts.requests.additional-video.download', $partRequest) }}"
+                           class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold shadow-xs transition">
+                            <i class="fas fa-download"></i> Download Video
+                        </a>
+                    @endif
+
+                    @if(!in_array($partRequest->status, ['approved', 'dispatched']) && (auth()->user()->isOfficeStaff() || auth()->user()->isSuperior() || (auth()->user()->isEngineer() && auth()->id() === $partRequest->engineer_id)))
+                        <button type="button" onclick="openUpdateVideoModal('additional')"
+                                class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-semibold shadow-xs transition cursor-pointer">
+                            <i class="fas fa-cloud-arrow-up"></i> {{ $partRequest->additional_fault_video_path ? 'Update Video' : 'Upload Video' }}
+                        </button>
+                    @endif
+                </div>
+            </div>
+
+            @if($partRequest->additional_fault_video_path)
+                <div class="mt-3 max-w-2xl bg-black rounded-lg overflow-hidden shadow">
+                    <video controls playsinline preload="metadata" class="w-full max-h-[360px]">
+                        <source src="{{ route('parts.requests.additional-video', $partRequest) }}">
+                        Your browser does not support the video tag.
+                    </video>
+                </div>
+            @endif
+        </div>
+    @endif
+
     {{-- Parts Table --}}
     <div class="bg-white rounded-xl shadow border border-slate-200 overflow-hidden mb-5">
         <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
@@ -1012,7 +1097,7 @@ function closeUpdateVideoModal() {
 <div id="updateVideoModal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs hidden items-center justify-center p-4">
     <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200">
         <div class="flex items-center justify-between mb-4">
-            <h4 class="text-sm font-bold text-slate-900 flex items-center gap-2">
+            <h4 class="text-sm font-bold text-slate-900 flex items-center gap-2" id="modalVideoTitle">
                 <i class="fas fa-video text-amber-500"></i> Update Fault Diagnostic Video
             </h4>
             <button type="button" onclick="closeUpdateVideoModal()" class="text-slate-400 hover:text-slate-600 transition">
@@ -1020,12 +1105,14 @@ function closeUpdateVideoModal() {
             </button>
         </div>
 
-        <p class="text-xs text-slate-600 mb-4">
+        <p class="text-xs text-slate-600 mb-4" id="modalVideoSubtitle">
             If an incorrect video was uploaded, you can replace it with the correct file. You can update this video at any time until Super Admin approves the request.
         </p>
 
         <form method="POST" action="{{ route('parts.requests.video.update', $partRequest) }}" enctype="multipart/form-data" class="space-y-4">
             @csrf
+            <input type="hidden" name="target_video" id="modalTargetVideo" value="primary">
+
             <div>
                 <label class="block text-xs font-semibold text-slate-700 mb-1">
                     Select New Video File (MP4, MOV, AVI, WEBM, MKV - Max 100MB) <span class="text-rose-500">*</span>
@@ -1033,13 +1120,6 @@ function closeUpdateVideoModal() {
                 <input type="file" name="fault_video" accept="video/*" required
                        class="block w-full text-xs border border-slate-300 rounded-lg px-3 py-2 file:mr-3 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:bg-amber-50 file:text-amber-700 hover:file:bg-amber-100">
             </div>
-
-            @if($partRequest->fault_video_path)
-                <div class="text-[11px] text-slate-500 bg-slate-50 p-2.5 rounded-lg border border-slate-200">
-                    <span class="font-medium text-slate-700">Current Video:</span> <span class="font-mono">{{ basename($partRequest->fault_video_path) }}</span>
-                    <span class="block text-amber-600 mt-0.5">Uploading will overwrite and replace this video file.</span>
-                </div>
-            @endif
 
             <div class="flex gap-2 justify-end pt-2">
                 <button type="button" onclick="closeUpdateVideoModal()"
@@ -1054,5 +1134,31 @@ function closeUpdateVideoModal() {
         </form>
     </div>
 </div>
+
+<script>
+function openUpdateVideoModal(target = 'primary') {
+    const hidden = document.getElementById('modalTargetVideo');
+    if (hidden) hidden.value = target;
+    const title = document.getElementById('modalVideoTitle');
+    if (title) {
+        title.innerHTML = target === 'additional'
+            ? '<i class="fas fa-video text-indigo-600"></i> Update Additional Machine Diagnostic Video'
+            : '<i class="fas fa-video text-amber-500"></i> Update Primary Fault Diagnostic Video';
+    }
+    const sub = document.getElementById('modalVideoSubtitle');
+    if (sub) {
+        sub.innerText = target === 'additional'
+            ? 'Upload or update diagnostic video evidence for the additional broken machine at site.'
+            : 'If an incorrect video was uploaded, replace it with the correct file before Super Admin approval.';
+    }
+    const modal = document.getElementById('updateVideoModal');
+    if (modal) modal.classList.remove('hidden');
+}
+
+function closeUpdateVideoModal() {
+    const modal = document.getElementById('updateVideoModal');
+    if (modal) modal.classList.add('hidden');
+}
+</script>
 @endif
 @endsection

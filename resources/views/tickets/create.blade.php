@@ -36,6 +36,33 @@
             </div>
         </div>
 
+        <!-- Ticket Nature: Complaint vs New Machine Installation -->
+        <div class="p-4 bg-indigo-50/60 rounded-xl border border-indigo-200">
+            <label class="block text-xs font-bold text-slate-800 uppercase tracking-wider mb-2">
+                <i class="fa-solid fa-layer-group text-indigo-600 mr-1"></i> Work Order / Ticket Nature *
+            </label>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <label class="flex items-start space-x-2.5 p-3 bg-white rounded-lg border border-slate-200 cursor-pointer hover:bg-slate-50 transition shadow-2xs">
+                    <input type="radio" name="ticket_type" value="complaint" checked class="mt-0.5 text-sky-600 focus:ring-sky-500">
+                    <div>
+                        <span class="font-extrabold text-slate-900 flex items-center">
+                            <i class="fa-solid fa-triangle-exclamation text-amber-500 mr-1.5 text-xs"></i> Standard Complaint / Fault Repair (Default)
+                        </span>
+                        <p class="text-[11px] text-slate-500 mt-0.5">Machine breakdown, hardware jam, sensor fault, or on-site service call</p>
+                    </div>
+                </label>
+                <label class="flex items-start space-x-2.5 p-3 bg-white rounded-lg border border-purple-200 cursor-pointer hover:bg-purple-50 transition shadow-2xs">
+                    <input type="radio" name="ticket_type" value="installation" class="mt-0.5 text-purple-600 focus:ring-purple-500">
+                    <div>
+                        <span class="font-extrabold text-purple-900 flex items-center">
+                            <i class="fa-solid fa-screwdriver-wrench text-purple-600 mr-1.5 text-xs"></i> 🔧 New Machine Installation
+                        </span>
+                        <p class="text-[11px] text-slate-500 mt-0.5">Brand new machine deployment, on-site setup, testing, and branch handover</p>
+                    </div>
+                </label>
+            </div>
+        </div>
+
         <!-- Bank & Branch Section -->
         <div>
             <h2 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">1. Bank & Location Information</h2>
@@ -86,15 +113,21 @@
                     <label class="block font-medium text-slate-700 mb-1">Machine Type</label>
                     <select name="machine_type" class="w-full border border-slate-300 rounded-lg p-2 text-xs focus:ring-1 focus:ring-sky-500">
                         <option value="">-- Unknown / Not Specified --</option>
-                        <option value="Cash Sorting Machine">Cash Sorting Machine</option>
-                        <option value="Counting Machine">Counting Machine</option>
-                        <option value="Binding Machine">Binding Machine</option>
-                        <option value="ATM">ATM (Cash Dispenser)</option>
-                        <option value="CDM">CDM (Cash Deposit)</option>
-                        <option value="POS">POS Terminal</option>
-                        <option value="Kiosk">Cheque / Statement Kiosk</option>
-                        <option value="Server">Branch Banking Server</option>
-                        <option value="Other">Other Equipment</option>
+                        @if(isset($machineTypes))
+                            @foreach($machineTypes as $mType)
+                                <option value="{{ $mType }}" {{ old('machine_type') === $mType ? 'selected' : '' }}>{{ $mType }}</option>
+                            @endforeach
+                        @else
+                            <option value="Cash Sorting Machine">Cash Sorting Machine</option>
+                            <option value="Cash Counting Machine">Cash Counting Machine</option>
+                            <option value="Cash Binding Machine">Cash Binding Machine</option>
+                            <option value="Shrink Wrapping Machine">Shrink Wrapping Machine</option>
+                            <option value="ATM">ATM (Cash Dispenser)</option>
+                            <option value="CDM">CDM (Cash Deposit)</option>
+                            <option value="POS">POS Terminal</option>
+                            <option value="Kiosk">Cheque / Statement Kiosk</option>
+                            <option value="Other Equipment">Other Equipment</option>
+                        @endif
                     </select>
                 </div>
                 <div>

@@ -131,7 +131,7 @@ class PartsController extends Controller
         $data = $request->validate([
             'name'         => 'required|string|max:200',
             'manufacturer' => 'nullable|string|max:100',
-            'machine_type' => 'required|in:atm,cdm,pos,kiosk,other',
+            'machine_type' => 'required|string|max:100',
             'description'  => 'nullable|string',
         ]);
         $model = MachineModel::create(array_merge($data, ['is_active' => true]));
@@ -144,7 +144,7 @@ class PartsController extends Controller
         $data = $request->validate([
             'name'         => 'required|string|max:200',
             'manufacturer' => 'nullable|string|max:100',
-            'machine_type' => 'required|in:atm,cdm,pos,kiosk,other',
+            'machine_type' => 'required|string|max:100',
             'description'  => 'nullable|string',
         ]);
         $model->update($data);
