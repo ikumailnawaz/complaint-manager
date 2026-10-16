@@ -863,6 +863,7 @@ class TicketController extends Controller
             'workshop_dispatch_tracking' => 'nullable|string|max:100',
             'workshop_engineer_id'       => 'nullable|exists:users,id',
             'notes'                      => 'required|string',
+            'document'                   => 'nullable|file|mimes:jpeg,png,jpg,gif,webp,pdf|max:15360',
         ]);
 
         $courier = $request->workshop_dispatch_courier ?: 'TCS Cargo / Courier';
@@ -888,6 +889,14 @@ class TicketController extends Controller
             $updateData['workshop_engineer_id'] = (int) $request->workshop_engineer_id;
         }
 
+        if ($request->hasFile('document')) {
+            $file = $request->file('document');
+            $filename = time() . '_' . preg_replace('/[^a-zA-Z0-9._-]/', '_', $file->getClientOriginalName());
+            $path = $file->storeAs('workshop_dispatches', $filename, 'public');
+            $updateData['workshop_dispatch_document'] = $path;
+            $updateData['workshop_dispatch_document_name'] = $file->getClientOriginalName();
+        }
+
         $ticket->update($updateData);
 
         $workshopEngineer = $ticket->workshop_engineer_id ? User::find($ticket->workshop_engineer_id) : null;
@@ -895,11 +904,12 @@ class TicketController extends Controller
         $whatsapp->sendWorkshopAlert($ticket, $request->workshop_location, $workshopEngineer);
 
         $fieldEngName = $ticket->originalFieldEngineer?->name ?? $ticket->engineer?->name ?? 'Field Engineer';
+        $docNote = !empty($updateData['workshop_dispatch_document']) ? " with dispatch document ({$updateData['workshop_dispatch_document_name']})" : "";
         TicketLog::create([
             'ticket_id' => $ticket->id,
             'user_id'   => Auth::id(),
             'action'    => 'workshop_transfer',
-            'notes'     => "Machine dispatched from branch to {$request->workshop_location} via {$courier} (Tracking #{$tracking}). Ticket remains under Field Engineer {$fieldEngName} during transit. Cargo Notes: {$request->notes}",
+            'notes'     => "Machine dispatched from branch to {$request->workshop_location} via {$courier} (Tracking #{$tracking}){$docNote}. Ticket remains under Field Engineer {$fieldEngName} during transit. Cargo Notes: {$request->notes}",
         ]);
 
         return back()->with('success', "Ticket updated: Machine routed to {$request->workshop_location} via {$courier} (Tracking #{$tracking}). Ticket remains assigned to {$fieldEngName} until physical intake at workshop.");

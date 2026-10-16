@@ -21,7 +21,7 @@
         </div>
 
         <!-- Workshop Transfer Form -->
-        <form id="workshopTransferForm" action="" method="POST" class="p-6 space-y-4 text-xs">
+        <form id="workshopTransferForm" action="" method="POST" enctype="multipart/form-data" class="p-6 space-y-4 text-xs">
             @csrf
             <div>
                 <label for="workshopLocationSelect" class="block font-bold text-slate-700 mb-1">
@@ -48,7 +48,7 @@
                         Bilty / Courier Tracking #
                     </label>
                     <input type="text" name="workshop_dispatch_tracking" placeholder="e.g. TCS-778899 or Cargo CN"
-                           class="w-full border border-slate-300 rounded-xl p-2.5 text-xs focus:ring-2 focus:ring-purple-500 focus:outline-none bg-white">
+                           class="w-full border border-slate-300 rounded-xl p-2.5 text-xs focus:ring-2 focus:ring-purple-500 focus:outline-none bg-white font-mono">
                 </div>
             </div>
 
@@ -71,6 +71,13 @@
                     Fault Reason &amp; Dispatch Cargo Notes <span class="text-rose-500">*</span>
                 </label>
                 <textarea name="notes" id="workshopNotesInput" rows="3" required placeholder="Explain why machine cannot be repaired on-site (e.g. PCB repair, optical alignment, specialized roller gear replacement needed)..." class="w-full border border-slate-300 rounded-xl p-2.5 text-xs focus:ring-2 focus:ring-purple-500 focus:outline-none"></textarea>
+            </div>
+
+            <div>
+                <label class="block font-bold text-slate-700 mb-1">
+                    Supporting Document / Consignment Slip / Gate Pass (Optional)
+                </label>
+                <input type="file" name="document" accept=".jpeg,.png,.jpg,.gif,.webp,.pdf" class="w-full text-xs text-slate-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-purple-100 file:text-purple-800 hover:file:bg-purple-200 border border-slate-200 rounded-xl p-2 bg-slate-50">
             </div>
 
             <div class="bg-amber-50 border border-amber-200 rounded-xl p-3 text-[11px] text-amber-900 flex items-start space-x-2">

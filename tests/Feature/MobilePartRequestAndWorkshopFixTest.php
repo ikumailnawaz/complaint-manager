@@ -182,4 +182,78 @@ class MobilePartRequestAndWorkshopFixTest extends TestCase
         $resTransit->assertSee('Confirm Bank Receipt & Close');
         $resTransit->assertDontSee('Dispatch Back to Bank');
     }
+
+    public function test_mobile_engineer_must_provide_supporting_document_for_waiting_for_approval()
+    {
+        \Illuminate\Support\Facades\Storage::fake('public');
+
+        // Attempt without document -> fails
+        $resWithoutDoc = $this->actingAs($this->engineer, 'sanctum')->postJson("/api/v1/engineer/tickets/{$this->ticket->id}/request-approval", [
+            'reason'          => 'Waiting for customer quotation sign-off',
+            'approval_source' => 'Operations Head',
+        ]);
+        $resWithoutDoc->assertStatus(422);
+        $resWithoutDoc->assertJsonValidationErrors(['document']);
+
+        // Upload with document -> succeeds
+        $file = \Illuminate\Http\UploadedFile::fake()->create('approval_letter.pdf', 100, 'application/pdf');
+        $resWithDoc = $this->actingAs($this->engineer, 'sanctum')->post("/api/v1/engineer/tickets/{$this->ticket->id}/request-approval", [
+            'reason'          => 'Waiting for customer quotation sign-off',
+            'approval_source' => 'Operations Head',
+            'document'        => $file,
+        ], ['Accept' => 'application/json']);
+
+        $resWithDoc->assertOk();
+        $resWithDoc->assertJson(['success' => true]);
+
+        $this->ticket->refresh();
+        $this->assertEquals('awaiting_approval', $this->ticket->status);
+        $this->assertNotNull($this->ticket->approval_document);
+        $this->assertEquals('approval_letter.pdf', $this->ticket->approval_document_name);
+        \Illuminate\Support\Facades\Storage::disk('public')->assertExists($this->ticket->approval_document);
+
+        // Verify ticket detail API returns approval_document_url
+        $detailRes = $this->actingAs($this->engineer, 'sanctum')->getJson("/api/v1/engineer/tickets/{$this->ticket->id}");
+        $detailRes->assertOk();
+        $this->assertNotNull($detailRes->json('ticket.approval_document_url'));
+        $this->assertEquals('approval_letter.pdf', $detailRes->json('ticket.approval_document_name'));
+    }
+
+    public function test_mobile_engineer_must_provide_supporting_document_for_send_to_workshop()
+    {
+        \Illuminate\Support\Facades\Storage::fake('public');
+
+        // Attempt without document -> fails
+        $resWithoutDoc = $this->actingAs($this->engineer, 'sanctum')->postJson("/api/v1/engineer/tickets/{$this->ticket->id}/workshop", [
+            'workshop_location' => 'Lahore Central Workshop',
+            'notes'             => 'Optical sensor misaligned, requires bench lathe',
+        ]);
+        $resWithoutDoc->assertStatus(422);
+        $resWithoutDoc->assertJsonValidationErrors(['document']);
+
+        // Upload with consignment receipt -> succeeds
+        $file = \Illuminate\Http\UploadedFile::fake()->image('tcs_consignment_bilty.jpg');
+        $resWithDoc = $this->actingAs($this->engineer, 'sanctum')->post("/api/v1/engineer/tickets/{$this->ticket->id}/workshop", [
+            'workshop_location'          => 'Lahore Central Workshop',
+            'workshop_dispatch_courier'  => 'TCS Express Cargo',
+            'workshop_dispatch_tracking' => 'TCS-998811',
+            'notes'                      => 'Optical sensor misaligned, requires bench lathe',
+            'document'                   => $file,
+        ], ['Accept' => 'application/json']);
+
+        $resWithDoc->assertOk();
+        $resWithDoc->assertJson(['success' => true]);
+
+        $this->ticket->refresh();
+        $this->assertEquals('awaiting_workshop', $this->ticket->status);
+        $this->assertNotNull($this->ticket->workshop_dispatch_document);
+        $this->assertEquals('tcs_consignment_bilty.jpg', $this->ticket->workshop_dispatch_document_name);
+        \Illuminate\Support\Facades\Storage::disk('public')->assertExists($this->ticket->workshop_dispatch_document);
+
+        // Verify ticket detail API returns workshop_dispatch_document_url
+        $detailRes = $this->actingAs($this->engineer, 'sanctum')->getJson("/api/v1/engineer/tickets/{$this->ticket->id}");
+        $detailRes->assertOk();
+        $this->assertNotNull($detailRes->json('ticket.workshop_dispatch_document_url'));
+        $this->assertEquals('tcs_consignment_bilty.jpg', $detailRes->json('ticket.workshop_dispatch_document_name'));
+    }
 }

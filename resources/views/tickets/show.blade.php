@@ -195,6 +195,15 @@
                             <span><i class="fa-regular fa-clock mr-1"></i>Current SLA Deadline: <strong>{{ $ticket->sla_deadline->format('d M Y, h:i A') }}</strong></span>
                         @endif
                     </div>
+                    @if($ticket->hasApprovalDocument())
+                        <div class="mt-2.5">
+                            <a href="{{ $ticket->approvalDocumentUrl() }}" target="_blank" class="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-white/20 hover:bg-white/30 text-white font-bold text-xs border border-white/30 backdrop-blur-sm transition shadow-2xs">
+                                <i class="fa-solid fa-paperclip"></i>
+                                <span>Approval Supporting Document: <u>{{ $ticket->approval_document_name ?? basename($ticket->approval_document) }}</u></span>
+                                <i class="fa-solid fa-arrow-up-right-from-square text-[10px] ml-1"></i>
+                            </a>
+                        </div>
+                    @endif
                 </div>
             </div>
 
@@ -219,12 +228,22 @@
     <div class="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-xs text-emerald-900 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-xs">
         <div class="flex items-center space-x-2">
             <i class="fa-solid fa-check-circle text-emerald-600 text-sm"></i>
-            <span>
-                <strong>Approval History:</strong> SLA clock was paused for {{ round($ticket->approval_paused_seconds / 3600, 1) }} hours. Approval confirmed on {{ $ticket->approval_arrived_at->format('d M Y, h:i A') }} by {{ $ticket->approvalArrivedBy?->name ?? 'Admin' }}.
-                @if($ticket->approval_arrived_remarks)
-                    Remarks: <em>"{{ $ticket->approval_arrived_remarks }}"</em>
+            <div>
+                <span>
+                    <strong>Approval History:</strong> SLA clock was paused for {{ round($ticket->approval_paused_seconds / 3600, 1) }} hours. Approval confirmed on {{ $ticket->approval_arrived_at->format('d M Y, h:i A') }} by {{ $ticket->approvalArrivedBy?->name ?? 'Admin' }}.
+                    @if($ticket->approval_arrived_remarks)
+                        Remarks: <em>"{{ $ticket->approval_arrived_remarks }}"</em>
+                    @endif
+                </span>
+                @if($ticket->hasApprovalDocument())
+                    <div class="mt-1">
+                        <a href="{{ $ticket->approvalDocumentUrl() }}" target="_blank" class="inline-flex items-center space-x-1 text-emerald-800 font-bold hover:underline">
+                            <i class="fa-solid fa-paperclip text-emerald-600"></i>
+                            <span>View Submitted Approval Document ({{ $ticket->approval_document_name ?? basename($ticket->approval_document) }})</span>
+                        </a>
+                    </div>
                 @endif
-            </span>
+            </div>
         </div>
         <span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-emerald-200 text-emerald-800 shrink-0 self-start sm:self-center">
             TAT Extended by {{ round($ticket->approval_paused_seconds / 3600, 1) }}h
@@ -411,6 +430,14 @@
                         <div>Courier: <strong class="text-slate-800">{{ $ticket->workshop_dispatch_courier ?? 'Courier' }}</strong></div>
                         <div class="font-mono text-[10px] text-purple-700 font-bold">{{ $ticket->workshop_dispatch_tracking ?? 'In Transit' }}</div>
                         <div class="text-[10px] text-slate-400">On-site: {{ $ticket->field_duration_text }}</div>
+                        @if($ticket->hasWorkshopDispatchDocument())
+                            <div class="pt-1 mt-1 border-t border-purple-200">
+                                <a href="{{ $ticket->workshopDispatchDocumentUrl() }}" target="_blank" class="text-[10px] font-bold text-purple-700 hover:text-purple-900 inline-flex items-center gap-1 underline">
+                                    <i class="fa-solid fa-paperclip"></i>
+                                    <span>Dispatch Doc ({{ $ticket->workshop_dispatch_document_name ?? basename($ticket->workshop_dispatch_document) }})</span>
+                                </a>
+                            </div>
+                        @endif
                     </div>
                 </div>
 
@@ -1871,13 +1898,12 @@
                     <span>Request Spare Parts</span>
                 </a>
 
-                <form action="{{ route('tickets.request-approval', $ticket) }}" method="POST" class="inline" onsubmit="return confirm('Pause SLA timer and mark Ticket #{{ $ticket->ticket_no }} as Waiting for Approval?');">
-                    @csrf
-                    <button type="submit" class="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-lg text-xs shadow-sm transition flex items-center space-x-1.5 cursor-pointer">
-                        <i class="fa-solid fa-pause"></i>
-                        <span>Waiting for Approval (Pause SLA)</span>
-                    </button>
-                </form>
+                <button type="button" 
+                        onclick="openRequestApprovalModal({{ $ticket->id }}, '{{ $ticket->ticket_no }}', '{{ addslashes($ticket->bank_name) }}')"
+                        class="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-lg text-xs shadow-sm transition flex items-center space-x-1.5 cursor-pointer">
+                    <i class="fa-solid fa-pause"></i>
+                    <span>Waiting for Approval (Pause SLA)</span>
+                </button>
             @endif
 
             <!-- Send Resolution Email (Operations Manager) -->

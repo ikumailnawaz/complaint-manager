@@ -260,6 +260,13 @@ class MobileApiController extends Controller
                 'has_active_expense' => $ticket->hasActiveExpenseClaim($user->id),
                 'supporting_doc_url' => $ticket->supporting_document ? asset('storage/' . $ticket->supporting_document) : null,
                 'resolution_summary' => $ticket->resolution_summary,
+                'approval_requested_at'           => $ticket->approval_requested_at?->format('d M Y, h:i A'),
+                'approval_source'                 => $ticket->approval_source,
+                'approval_request_reason'         => $ticket->approval_request_reason,
+                'approval_document_name'          => $ticket->approval_document_name,
+                'approval_document_url'           => $ticket->approvalDocumentUrl(),
+                'workshop_dispatch_document_name' => $ticket->workshop_dispatch_document_name,
+                'workshop_dispatch_document_url'  => $ticket->workshopDispatchDocumentUrl(),
                 'current_tour'       => (int) ($ticket->current_cycle_no ?: 1),
                 'reopen_count'       => (int) $ticket->reopen_count,
                 'is_lead_engineer'   => $ticket->isLeadEngineer($user),
@@ -586,12 +593,15 @@ class MobileApiController extends Controller
         $validator = Validator::make($request->all(), [
             'approval_source' => 'nullable|string|max:150',
             'reason'          => 'required|string|max:1000',
+            'document'        => 'required|file|mimes:jpeg,png,jpg,gif,webp,pdf|max:15360',
+        ], [
+            'document.required' => 'Supporting document is mandatory when putting a complaint on waiting for approval.',
         ]);
 
         if ($validator->fails()) {
             return response()->json([
                 'success' => false,
-                'message' => 'Please provide a reason for requesting approval.',
+                'message' => $validator->errors()->first(),
                 'errors'  => $validator->errors(),
             ], 422);
         }
@@ -600,20 +610,33 @@ class MobileApiController extends Controller
         $source = $request->input('approval_source') ?: 'Customer / Branch Manager Authorization';
         $reason = $request->input('reason');
 
+        $docPath = null;
+        $docName = null;
+        if ($request->hasFile('document')) {
+            $file = $request->file('document');
+            $filename = time() . '_' . preg_replace('/[^a-zA-Z0-9._-]/', '_', $file->getClientOriginalName());
+            $docPath = $file->storeAs('approvals', $filename, 'public');
+            $docName = $file->getClientOriginalName();
+        }
+
         $ticket->update([
             'status'                   => 'awaiting_approval',
             'approval_requested_at'    => $now,
             'approval_requested_by_id' => $user->id,
             'approval_source'          => $source,
             'approval_request_reason'  => $reason,
+            'approval_document'        => $docPath,
+            'approval_document_name'   => $docName,
             'sla_paused_at'            => $now,
         ]);
+
+        $docNote = $docName ? " (Attached Document: {$docName})" : "";
 
         TicketLog::create([
             'ticket_id' => $ticket->id,
             'user_id'   => $user->id,
             'action'    => 'approval_requested',
-            'notes'     => "SLA Clock Paused via Android App by {$user->name}. Waiting for Approval ({$source}). Reason: {$reason}",
+            'notes'     => "SLA Clock Paused via Android App by {$user->name}. Waiting for Approval ({$source}). Reason: {$reason}{$docNote}",
         ]);
 
         return response()->json([
@@ -648,12 +671,15 @@ class MobileApiController extends Controller
             'workshop_dispatch_courier'  => 'nullable|string|max:100',
             'workshop_dispatch_tracking' => 'nullable|string|max:100',
             'notes'                      => 'required|string|max:2000',
+            'document'                   => 'required|file|mimes:jpeg,png,jpg,gif,webp,pdf|max:15360',
+        ], [
+            'document.required' => 'Supporting document (cargo consignment note/gate pass/slip) is mandatory when dispatching to workshop.',
         ]);
 
         if ($validator->fails()) {
             return response()->json([
                 'success' => false,
-                'message' => 'Please provide workshop destination and cargo notes.',
+                'message' => $validator->errors()->first(),
                 'errors'  => $validator->errors(),
             ], 422);
         }
@@ -662,15 +688,26 @@ class MobileApiController extends Controller
         $tracking = $request->workshop_dispatch_tracking ?: ('TRK-' . date('Ymd') . '-' . rand(100, 999));
         $originalFieldEngineerId = $ticket->original_field_engineer_id ?? $ticket->assigned_engineer_id ?? $user->id;
 
+        $docPath = null;
+        $docName = null;
+        if ($request->hasFile('document')) {
+            $file = $request->file('document');
+            $filename = time() . '_' . preg_replace('/[^a-zA-Z0-9._-]/', '_', $file->getClientOriginalName());
+            $docPath = $file->storeAs('workshop_dispatches', $filename, 'public');
+            $docName = $file->getClientOriginalName();
+        }
+
         $ticket->update([
-            'status'                     => 'awaiting_workshop',
-            'workshop_location'          => $request->workshop_location,
-            'original_field_engineer_id' => $originalFieldEngineerId,
-            'assigned_engineer_id'       => $originalFieldEngineerId,
-            'workshop_dispatch_courier'  => $courier,
-            'workshop_dispatch_tracking' => $tracking,
-            'workshop_dispatched_at'     => Carbon::now(),
-            'workshop_dispatch_notes'    => $request->notes,
+            'status'                          => 'awaiting_workshop',
+            'workshop_location'               => $request->workshop_location,
+            'original_field_engineer_id'      => $originalFieldEngineerId,
+            'assigned_engineer_id'            => $originalFieldEngineerId,
+            'workshop_dispatch_courier'       => $courier,
+            'workshop_dispatch_tracking'      => $tracking,
+            'workshop_dispatched_at'          => Carbon::now(),
+            'workshop_dispatch_notes'         => $request->notes,
+            'workshop_dispatch_document'      => $docPath,
+            'workshop_dispatch_document_name' => $docName,
         ]);
 
         try {
@@ -680,11 +717,13 @@ class MobileApiController extends Controller
             \Illuminate\Support\Facades\Log::warning('WhatsApp workshop alert skipped: ' . $e->getMessage());
         }
 
+        $docNote = $docName ? " with dispatch document ({$docName})" : "";
+
         TicketLog::create([
             'ticket_id' => $ticket->id,
             'user_id'   => $user->id,
             'action'    => 'workshop_transfer',
-            'notes'     => "Machine sent to {$request->workshop_location} via {$courier} (Tracking #{$tracking}). Dispatched by {$user->name}. Notes: {$request->notes}",
+            'notes'     => "Machine sent to {$request->workshop_location} via {$courier} (Tracking #{$tracking}){$docNote}. Dispatched by {$user->name}. Notes: {$request->notes}",
         ]);
 
         return response()->json([

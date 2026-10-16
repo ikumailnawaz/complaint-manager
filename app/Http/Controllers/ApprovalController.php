@@ -91,26 +91,39 @@ class ApprovalController extends Controller
         $request->validate([
             'approval_source' => 'nullable|string|max:150',
             'reason'          => 'nullable|string|max:1000',
+            'document'        => 'nullable|file|mimes:jpeg,png,jpg,gif,webp,pdf|max:15360',
         ]);
 
         $now = Carbon::now();
         $source = $request->input('approval_source') ?: 'Customer / Bank Sign-off';
         $reason = $request->input('reason') ?: 'Work put on hold awaiting customer / bank authorization.';
 
-        $ticket->update([
+        $updateData = [
             'status'                   => 'awaiting_approval',
             'approval_requested_at'    => $now,
             'approval_requested_by_id' => $user->id,
             'approval_source'          => $source,
             'approval_request_reason'  => $reason,
             'sla_paused_at'            => $now,
-        ]);
+        ];
+
+        if ($request->hasFile('document')) {
+            $file = $request->file('document');
+            $filename = time() . '_' . preg_replace('/[^a-zA-Z0-9._-]/', '_', $file->getClientOriginalName());
+            $path = $file->storeAs('approvals', $filename, 'public');
+            $updateData['approval_document'] = $path;
+            $updateData['approval_document_name'] = $file->getClientOriginalName();
+        }
+
+        $ticket->update($updateData);
+
+        $docNote = !empty($updateData['approval_document']) ? " with attached document ({$updateData['approval_document_name']})" : "";
 
         TicketLog::create([
             'ticket_id' => $ticket->id,
             'user_id'   => $user->id,
             'action'    => 'approval_requested',
-            'notes'     => "SLA Clock Paused by {$user->name}. Ticket marked as 'Waiting for Approval'. Reason: {$reason}",
+            'notes'     => "SLA Clock Paused by {$user->name}. Ticket marked as 'Waiting for Approval'. Reason: {$reason}{$docNote}",
         ]);
 
         return back()->with('success', "Ticket #{$ticket->ticket_no} is now marked as Waiting for Approval. SLA timer has been paused!");

@@ -207,6 +207,15 @@
                                 <span class="text-red-600 font-extrabold animate-pulse">Actively waiting for bank clearance right now</span>
                             @endif
                         </div>
+                        @if($ticket->hasApprovalDocument())
+                            <div class="mt-2 pt-2 border-t border-amber-200">
+                                <a href="{{ $ticket->approvalDocumentUrl() }}" target="_blank" class="inline-flex items-center gap-1.5 text-xs font-bold text-amber-900 bg-white/90 hover:bg-white px-2.5 py-1 rounded-md border border-amber-300 shadow-2xs">
+                                    <i class="fa-solid fa-paperclip text-amber-700"></i>
+                                    <span>Approval Supporting Document: <u>{{ $ticket->approval_document_name ?? basename($ticket->approval_document) }}</u></span>
+                                    <i class="fa-solid fa-arrow-up-right-from-square text-[10px] text-amber-600"></i>
+                                </a>
+                            </div>
+                        @endif
                     </div>
                 </div>
             @endif
@@ -242,6 +251,15 @@
                         @if($ticket->workshop_repair_summary)
                             <div class="text-[10px] text-slate-600 italic border-t border-purple-100 pt-1 mt-1">
                                 Summary: "{{ $ticket->workshop_repair_summary }}"
+                            </div>
+                        @endif
+                        @if($ticket->hasWorkshopDispatchDocument())
+                            <div class="mt-2 pt-2 border-t border-purple-200">
+                                <a href="{{ $ticket->workshopDispatchDocumentUrl() }}" target="_blank" class="inline-flex items-center gap-1.5 text-xs font-bold text-purple-900 bg-white/90 hover:bg-white px-2.5 py-1 rounded-md border border-purple-300 shadow-2xs">
+                                    <i class="fa-solid fa-paperclip text-purple-700"></i>
+                                    <span>Workshop Dispatch Document: <u>{{ $ticket->workshop_dispatch_document_name ?? basename($ticket->workshop_dispatch_document) }}</u></span>
+                                    <i class="fa-solid fa-arrow-up-right-from-square text-[10px] text-purple-600"></i>
+                                </a>
                             </div>
                         @endif
                     </div>

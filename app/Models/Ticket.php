@@ -143,6 +143,10 @@ class Ticket extends Model
         'approval_requested_by_id',
         'approval_source',
         'approval_request_reason',
+        'approval_document',
+        'approval_document_name',
+        'workshop_dispatch_document',
+        'workshop_dispatch_document_name',
         'sla_paused_at',
         'approval_paused_seconds',
         'approval_arrived_at',
@@ -1252,6 +1256,44 @@ class Ticket extends Model
             return false;
         }
         $ext = strtolower(pathinfo($this->supporting_document, PATHINFO_EXTENSION));
+        return in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp']);
+    }
+
+    public function hasApprovalDocument(): bool
+    {
+        return !empty($this->approval_document);
+    }
+
+    public function approvalDocumentUrl(): ?string
+    {
+        return $this->approval_document ? asset('storage/' . $this->approval_document) : null;
+    }
+
+    public function isApprovalDocumentImage(): bool
+    {
+        if (empty($this->approval_document)) {
+            return false;
+        }
+        $ext = strtolower(pathinfo($this->approval_document, PATHINFO_EXTENSION));
+        return in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp']);
+    }
+
+    public function hasWorkshopDispatchDocument(): bool
+    {
+        return !empty($this->workshop_dispatch_document);
+    }
+
+    public function workshopDispatchDocumentUrl(): ?string
+    {
+        return $this->workshop_dispatch_document ? asset('storage/' . $this->workshop_dispatch_document) : null;
+    }
+
+    public function isWorkshopDispatchDocumentImage(): bool
+    {
+        if (empty($this->workshop_dispatch_document)) {
+            return false;
+        }
+        $ext = strtolower(pathinfo($this->workshop_dispatch_document, PATHINFO_EXTENSION));
         return in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp']);
     }
 
