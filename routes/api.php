@@ -58,6 +58,8 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     // Spare Part Requests
     Route::get('/engineer/part-requests', [MobileApiController::class, 'getPartRequests'])->name('api.engineer.part-requests');
     Route::post('/engineer/part-requests', [MobileApiController::class, 'submitPartRequest'])->name('api.engineer.part-requests.store');
+    Route::put('/engineer/part-requests/{id}', [MobileApiController::class, 'updatePartRequest'])->name('api.engineer.part-requests.update');
+    Route::post('/engineer/part-requests/{id}/update', [MobileApiController::class, 'updatePartRequest'])->name('api.engineer.part-requests.update.post');
     Route::get('/engineer/parts-catalog', [MobileApiController::class, 'getPartsCatalog'])->name('api.engineer.parts-catalog');
     Route::get('/engineer/machine-models', [MobileApiController::class, 'getMachineModels'])->name('api.engineer.machine-models');
     Route::get('/engineer/machine-models/{id}/parts', [MobileApiController::class, 'getModelParts'])->name('api.engineer.machine-models.parts');

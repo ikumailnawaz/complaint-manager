@@ -980,9 +980,13 @@ class TicketController extends Controller
         $isWorkshop = $ticket->isWorkshopFlow() || in_array($ticket->status, ['in_workshop_repair', 'awaiting_workshop']);
 
         if ($isWorkshop) {
+            $newStatus = ($ticket->status === 'return_transit' || !empty($ticket->return_dispatched_at))
+                ? 'return_transit'
+                : 'workshop_repaired';
+
             $ticket->update([
-                'status' => 'workshop_repaired',
-                'workshop_repaired_at' => Carbon::now(),
+                'status' => $newStatus,
+                'workshop_repaired_at' => $ticket->workshop_repaired_at ?? Carbon::now(),
                 'workshop_repair_summary' => $request->resolution_summary,
                 'resolved_at' => Carbon::now(),
                 'resolution_summary' => $request->resolution_summary,

@@ -365,6 +365,7 @@ class WorkshopLifecycleTest extends TestCase
             'bank_name'            => 'MCB Bank',
             'branch_name'          => 'Main Branch',
             'branch_location'      => 'Sialkot',
+            'machine_serial_no'    => 'CMS-SN-TEST',
             'status'               => 'in_workshop_repair',
             'workshop_location'    => 'Lahore Central Workshop',
             'workshop_dispatched_at' => now()->subDays(3),

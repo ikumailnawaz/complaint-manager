@@ -26,6 +26,7 @@ class WorkshopController extends Controller
         $query = Ticket::with(['engineer', 'originalFieldEngineer', 'workshopEngineer', 'workshopReceivedBy'])
             ->where(function ($q) {
                 $q->whereNotNull('workshop_dispatched_at')
+                  ->orWhereNotNull('workshop_received_at')
                   ->orWhereNotNull('workshop_location')
                   ->orWhereIn('status', ['awaiting_workshop', 'in_workshop_repair', 'workshop_repaired', 'return_transit']);
             });
@@ -55,12 +56,21 @@ class WorkshopController extends Controller
                                     $q->where('status', 'workshop_repaired')
                                       ->orWhere(function($sq) {
                                           $sq->where('status', 'resolved')
-                                             ->whereNotNull('workshop_received_at')
-                                             ->whereNull('bank_received_at');
+                                             ->whereNotNull('workshop_received_at');
+                                      });
+                                })->whereNull('return_dispatched_at')->where('status', '!=', 'return_transit')->count(),
+            'return_transit' => (clone $query)->where(function($q) {
+                                    $q->where('status', 'return_transit')
+                                      ->orWhere(function($sq) {
+                                          $sq->whereNotNull('return_dispatched_at')
+                                             ->whereNull('bank_received_at')
+                                             ->whereNotIn('status', ['closed']);
                                       });
                                 })->count(),
-            'return_transit' => (clone $query)->where('status', 'return_transit')->count(),
-            'completed'      => (clone $query)->where('status', 'closed')->whereNotNull('workshop_dispatched_at')->count(),
+            'completed'      => (clone $query)->where('status', 'closed')->where(function($q) {
+                                    $q->whereNotNull('workshop_dispatched_at')
+                                      ->orWhereNotNull('workshop_received_at');
+                                })->count(),
         ];
 
         switch ($tab) {
@@ -72,16 +82,25 @@ class WorkshopController extends Controller
                     $q->where('status', 'workshop_repaired')
                       ->orWhere(function($sq) {
                           $sq->where('status', 'resolved')
-                             ->whereNotNull('workshop_received_at')
-                             ->whereNull('bank_received_at');
+                             ->whereNotNull('workshop_received_at');
+                      });
+                })->whereNull('return_dispatched_at')->where('status', '!=', 'return_transit');
+                break;
+            case 'return_transit':
+                $query->where(function($q) {
+                    $q->where('status', 'return_transit')
+                      ->orWhere(function($sq) {
+                          $sq->whereNotNull('return_dispatched_at')
+                             ->whereNull('bank_received_at')
+                             ->whereNotIn('status', ['closed']);
                       });
                 });
                 break;
-            case 'return_transit':
-                $query->where('status', 'return_transit');
-                break;
             case 'completed':
-                $query->where('status', 'closed')->whereNotNull('workshop_dispatched_at');
+                $query->where('status', 'closed')->where(function($q) {
+                    $q->whereNotNull('workshop_dispatched_at')
+                      ->orWhereNotNull('workshop_received_at');
+                });
                 break;
             case 'inbound':
             default:

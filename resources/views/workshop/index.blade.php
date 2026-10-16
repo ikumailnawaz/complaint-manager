@@ -276,11 +276,11 @@
                                         <span class="px-2 py-0.5 rounded font-bold text-[10px] bg-purple-100 text-purple-900 border border-purple-200">
                                             Bench Day {{ $t->workshop_engineer_day }} (Workshop Tech)
                                         </span>
-                                    @elseif($t->status === 'workshop_repaired')
+                                    @elseif($t->status === 'workshop_repaired' || (!$t->return_dispatched_at && $t->workshop_repaired_at))
                                         <span class="px-2 py-0.5 rounded font-bold text-[10px] bg-blue-100 text-blue-900 border border-blue-200">
                                             Repaired in {{ $t->workshop_repair_duration_text }}
                                         </span>
-                                    @elseif($t->status === 'return_transit')
+                                    @elseif($t->status === 'return_transit' || ($t->return_dispatched_at && !$t->bank_received_at))
                                         <span class="px-2 py-0.5 rounded font-bold text-[10px] bg-indigo-100 text-indigo-900 border border-indigo-200">
                                             Return: {{ $t->return_transit_duration_text }}
                                         </span>
@@ -318,14 +318,14 @@
                                             <span>Mark Bench Done</span>
                                         </button>
                                     @endif
-                                @elseif(($t->status === 'workshop_repaired' || ($t->status === 'resolved' && $t->workshop_received_at && !$t->bank_received_at)) && auth()->user()->isSuperior())
+                                @elseif(($t->status === 'workshop_repaired' || ($t->status === 'resolved' && $t->workshop_received_at && !$t->bank_received_at)) && !$t->return_dispatched_at && $t->status !== 'return_transit' && auth()->user()->isSuperior())
                                     <button type="button"
                                             onclick="openWorkshopReturnModal({{ $t->id }}, '{{ $t->ticket_no }}', '{{ addslashes($t->bank_name) }}')"
                                             class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg text-xs shadow-xs transition inline-flex items-center gap-1 cursor-pointer">
                                         <i class="fa-solid fa-truck"></i>
                                         <span>Dispatch Back to Bank</span>
                                     </button>
-                                @elseif($t->status === 'return_transit' && auth()->user()->isSuperior())
+                                @elseif(($t->status === 'return_transit' || ($t->return_dispatched_at && !$t->bank_received_at)) && auth()->user()->isSuperior())
                                     <button type="button"
                                             onclick="openWorkshopCloseModal({{ $t->id }}, '{{ $t->ticket_no }}', '{{ addslashes($t->bank_name) }}')"
                                             class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs shadow-xs transition inline-flex items-center gap-1 cursor-pointer">

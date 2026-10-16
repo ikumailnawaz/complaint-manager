@@ -32,10 +32,10 @@ class CheckSlaCommand extends Command
         $now = Carbon::now();
         $this->info("Running SLA monitor check at {$now->toDateTimeString()}...");
 
-        // 1. Find tickets that have breached their SLA deadline
+        // 1. Find tickets that have breached their SLA deadline (exclude workshop lifecycle and resolved/closed)
         $breachedTickets = Ticket::whereNotNull('sla_deadline')
             ->where('sla_deadline', '<', $now)
-            ->whereNotIn('status', ['resolved', 'closed'])
+            ->whereNotIn('status', ['resolved', 'closed', 'awaiting_workshop', 'in_workshop_repair', 'workshop_repaired', 'return_transit'])
             ->get();
 
         $escalatedCount = 0;

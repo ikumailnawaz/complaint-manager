@@ -182,6 +182,7 @@ class MobileApiController extends Controller
                 return [
                     'id'                 => $t->id,
                     'ticket_no'          => $t->ticket_no,
+                    'ticket_type'        => $t->ticket_type ?? 'complaint',
                     'customer_ref_no'    => $t->customer_ref_no,
                     'bank_name'          => $t->bank_name,
                     'branch_name'        => $t->branch_name,
@@ -229,6 +230,7 @@ class MobileApiController extends Controller
             'ticket'  => [
                 'id'                 => $ticket->id,
                 'ticket_no'          => $ticket->ticket_no,
+                'ticket_type'        => $ticket->ticket_type ?? 'complaint',
                 'customer_ref_no'    => $ticket->customer_ref_no,
                 'bank_name'          => $ticket->bank_name,
                 'branch_name'        => $ticket->branch_name,
@@ -293,16 +295,33 @@ class MobileApiController extends Controller
                 }),
                 'part_requests'      => $ticket->partRequests->map(function ($pr) {
                     return [
-                        'id'           => $pr->id,
-                        'request_no'   => $pr->request_number,
-                        'status'       => $pr->status,
-                        'status_label' => $pr->status_label,
-                        'items'      => $pr->items->map(fn($item) => [
+                        'id'                          => $pr->id,
+                        'request_no'                  => $pr->request_number,
+                        'status'                      => $pr->status,
+                        'status_label'                => $pr->status_label,
+                        'can_edit'                    => $pr->status === 'pending_stock_check',
+                        'machine_model_id'            => $pr->machine_model_id,
+                        'machine_model'               => $pr->machineModel?->name,
+                        'machine_serial_no'           => $pr->machine_serial_no,
+                        'fault_description'           => $pr->fault_description,
+                        'has_additional_machine'      => (bool)(!empty($pr->additional_machine_model_id) || !empty($pr->additional_machine_serial_no) || !empty($pr->additional_machine_model)),
+                        'additional_machine_model_id' => $pr->additional_machine_model_id,
+                        'additional_machine_model'    => $pr->additional_machine_model,
+                        'additional_machine_serial_no'=> $pr->additional_machine_serial_no,
+                        'additional_machine_type'     => $pr->additional_machine_type,
+                        'additional_fault_description'=> $pr->additional_fault_description,
+                        'additional_fault_video_url'  => $pr->additional_fault_video_path ? asset('storage/' . $pr->additional_fault_video_path) : null,
+                        'items'                       => $pr->items->map(fn($item) => [
+                            'part_id'          => $item->part_id,
                             'part_name'        => $item->part?->name,
                             'part_number'      => $item->part?->part_number,
-                            'qty_requested'    => $item->qty_requested,
-                            'from_envelope'    => $item->qty_from_envelope,
-                        ]),
+                            'unit'             => $item->part?->unit ?? 'PCS',
+                            'qty_requested'    => (int) $item->qty_requested,
+                            'qty_approved'     => (int) $item->qty_approved,
+                            'qty_dispatched'   => (int) $item->qty_dispatched,
+                            'from_envelope'    => (int) $item->qty_from_envelope,
+                            'note'             => $item->note,
+                        ])->values(),
                     ];
                 }),
                 'expense_claims'     => $ticket->expenseClaims->map(function ($c) {
@@ -1090,28 +1109,42 @@ class MobileApiController extends Controller
             'success'  => true,
             'requests' => $requests->map(function ($pr) {
                 return [
-                    'id'                => $pr->id,
-                    'request_no'        => $pr->request_number,
-                    'ticket_id'         => $pr->ticket_id,
-                    'ticket_no'         => $pr->ticket?->ticket_no,
-                    'bank_name'         => $pr->ticket?->bank_name,
-                    'branch_name'       => $pr->ticket?->branch_name,
-                    'machine_model'     => $pr->machineModel?->name,
-                    'machine_serial_no' => $pr->machine_serial_no,
-                    'fault_description' => $pr->fault_description,
-                    'status'            => $pr->status,
-                    'status_label'      => $pr->status_label,
-                    'rejection_reason'  => $pr->rejection_reason,
-                    'courier'           => $pr->dispatch_courier,
-                    'tracking_no'       => $pr->dispatch_tracking_number,
-                    'dispatched_at'     => $pr->dispatched_at?->format('d M Y, h:i A'),
-                    'created_at'        => $pr->created_at?->format('d M Y, h:i A'),
-                    'items'             => $pr->items->map(fn($item) => [
+                    'id'                          => $pr->id,
+                    'request_no'                  => $pr->request_number,
+                    'can_edit'                    => $pr->status === 'pending_stock_check',
+                    'ticket_id'                   => $pr->ticket_id,
+                    'ticket_no'                   => $pr->ticket?->ticket_no,
+                    'ticket_type'                 => $pr->ticket?->ticket_type ?? 'complaint',
+                    'bank_name'                   => $pr->ticket?->bank_name,
+                    'branch_name'                 => $pr->ticket?->branch_name,
+                    'machine_model_id'            => $pr->machine_model_id,
+                    'machine_model'               => $pr->machineModel?->name,
+                    'machine_serial_no'           => $pr->machine_serial_no,
+                    'fault_description'           => $pr->fault_description,
+                    'has_additional_machine'      => (bool)(!empty($pr->additional_machine_model_id) || !empty($pr->additional_machine_serial_no) || !empty($pr->additional_machine_model)),
+                    'additional_machine_model_id' => $pr->additional_machine_model_id,
+                    'additional_machine_model'    => $pr->additional_machine_model,
+                    'additional_machine_serial_no'=> $pr->additional_machine_serial_no,
+                    'additional_machine_type'     => $pr->additional_machine_type,
+                    'additional_fault_description'=> $pr->additional_fault_description,
+                    'additional_fault_video_url'  => $pr->additional_fault_video_path ? asset('storage/' . $pr->additional_fault_video_path) : null,
+                    'status'                      => $pr->status,
+                    'status_label'                => $pr->status_label,
+                    'rejection_reason'            => $pr->rejection_reason,
+                    'courier'                     => $pr->dispatch_courier,
+                    'tracking_no'                 => $pr->dispatch_tracking_number,
+                    'dispatched_at'               => $pr->dispatched_at?->format('d M Y, h:i A'),
+                    'created_at'                  => $pr->created_at?->format('d M Y, h:i A'),
+                    'items'                       => $pr->items->map(fn($item) => [
+                        'part_id'        => $item->part_id,
                         'part_name'      => $item->part?->name,
                         'part_number'    => $item->part?->part_number,
+                        'unit'           => $item->part?->unit ?? 'PCS',
                         'qty_requested'  => (int) $item->qty_requested,
                         'qty_approved'   => (int) $item->qty_approved,
                         'qty_dispatched' => (int) $item->qty_dispatched,
+                        'from_envelope'  => (int) $item->qty_from_envelope,
+                        'note'           => $item->note,
                     ])->values(),
                 ];
             }),
@@ -1255,6 +1288,11 @@ class MobileApiController extends Controller
         $pr = \Illuminate\Support\Facades\DB::transaction(function () use ($request, $user, $ticket) {
             $hasAdditional = !empty($request->has_additional_machine) || !empty($request->additional_machine_model_id) || !empty($request->additional_machine_serial_no);
 
+            $additionalVideoPath = null;
+            if ($request->hasFile('additional_fault_video')) {
+                $additionalVideoPath = $request->file('additional_fault_video')->store('part-requests/videos', 'public');
+            }
+
             $pr = PartRequest::create([
                 'request_number'    => PartRequest::generateRequestNumber(),
                 'ticket_id'         => $ticket->id,
@@ -1267,6 +1305,7 @@ class MobileApiController extends Controller
                 'additional_machine_serial_no' => $hasAdditional ? ($request->additional_machine_serial_no ?: null) : null,
                 'additional_machine_type'      => $hasAdditional ? ($request->additional_machine_type ?: null) : null,
                 'additional_fault_description' => $hasAdditional ? ($request->additional_fault_description ?: null) : null,
+                'additional_fault_video_path'  => $hasAdditional ? $additionalVideoPath : null,
                 'status'            => 'pending_stock_check',
             ]);
 
@@ -1302,6 +1341,93 @@ class MobileApiController extends Controller
             'success'    => true,
             'message'    => "Part request {$pr->request_number} submitted for stock verification.",
             'request_no' => $pr->request_number,
+        ]);
+    }
+
+    /**
+     * 15b. Update Part Request (Allowed BEFORE approval, while status == 'pending_stock_check')
+     */
+    public function updatePartRequest($id, Request $request)
+    {
+        $user = $request->user();
+        $pr = PartRequest::with(['items', 'ticket'])->findOrFail($id);
+
+        if ($user->isEngineer() && $pr->engineer_id !== $user->id) {
+            return response()->json(['success' => false, 'message' => 'You can only edit your own part requests.'], 403);
+        }
+
+        if ($pr->status !== 'pending_stock_check') {
+            return response()->json([
+                'success' => false,
+                'message' => 'This part request has already been processed or approved and can no longer be edited.',
+            ], 422);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'machine_model_id'  => 'nullable|exists:machine_models,id',
+            'machine_serial_no' => 'nullable|string|max:100',
+            'fault_description' => 'required|string|max:2000',
+            'items'             => 'required|array|min:1',
+            'items.*.part_id'   => 'required|exists:parts,id',
+            'items.*.qty'       => 'required|integer|min:1',
+            'items.*.note'      => 'nullable|string|max:255',
+            'additional_fault_video' => 'nullable|file|max:102400',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Please provide valid parts and fault details.',
+                'errors'  => $validator->errors(),
+            ], 422);
+        }
+
+        \Illuminate\Support\Facades\DB::transaction(function () use ($request, $user, $pr) {
+            $hasAdditional = !empty($request->has_additional_machine) || !empty($request->additional_machine_model_id) || !empty($request->additional_machine_serial_no);
+
+            $additionalVideoPath = $pr->additional_fault_video_path;
+            if ($request->hasFile('additional_fault_video')) {
+                $additionalVideoPath = $request->file('additional_fault_video')->store('part-requests/videos', 'public');
+            }
+
+            $pr->update([
+                'machine_model_id'             => $request->machine_model_id ?: $pr->machine_model_id,
+                'machine_serial_no'            => $request->machine_serial_no ?: $pr->machine_serial_no,
+                'fault_description'            => $request->fault_description,
+                'additional_machine_model_id'  => $hasAdditional ? ($request->additional_machine_model_id ?: null) : null,
+                'additional_machine_model'     => $hasAdditional ? ($request->additional_machine_model ?: null) : null,
+                'additional_machine_serial_no' => $hasAdditional ? ($request->additional_machine_serial_no ?: null) : null,
+                'additional_machine_type'      => $hasAdditional ? ($request->additional_machine_type ?: null) : null,
+                'additional_fault_description' => $hasAdditional ? ($request->additional_fault_description ?: null) : null,
+                'additional_fault_video_path'  => $hasAdditional ? $additionalVideoPath : null,
+            ]);
+
+            // Re-sync items
+            $pr->items()->delete();
+            foreach ($request->items as $item) {
+                $qtyReq = (int) $item['qty'];
+                $fromEnvelope = !empty($item['from_envelope']) ? min($qtyReq, (int) $item['from_envelope']) : 0;
+                PartRequestItem::create([
+                    'part_request_id'   => $pr->id,
+                    'part_id'           => (int) $item['part_id'],
+                    'qty_requested'     => $qtyReq,
+                    'qty_from_envelope' => $fromEnvelope,
+                    'note'              => $item['note'] ?? null,
+                ]);
+            }
+        });
+
+        TicketLog::create([
+            'ticket_id' => $pr->ticket_id,
+            'user_id'   => $user->id,
+            'action'    => 'part_request_updated',
+            'notes'     => "Part request {$pr->request_number} was edited/updated by Engineer {$user->name} before approval.",
+        ]);
+
+        return response()->json([
+            'success'      => true,
+            'message'      => "Part request {$pr->request_number} updated successfully.",
+            'part_request' => $pr->fresh(['items.part', 'machineModel']),
         ]);
     }
 
@@ -1447,6 +1573,8 @@ class MobileApiController extends Controller
         // Base query for tickets involved in central workshop
         $query = Ticket::where(function ($q) {
             $q->whereIn('status', ['awaiting_workshop', 'in_workshop_repair', 'workshop_repaired', 'return_transit'])
+              ->orWhereNotNull('workshop_dispatched_at')
+              ->orWhereNotNull('workshop_received_at')
               ->orWhere(function ($sq) {
                   $sq->whereIn('status', ['resolved', 'closed'])
                      ->whereNotNull('workshop_received_at');
@@ -1454,16 +1582,32 @@ class MobileApiController extends Controller
         });
 
         // Filter by tab
-        if ($tab === 'awaiting_intake') {
+        if ($tab === 'awaiting_intake' || $tab === 'inbound') {
             $query->where('status', 'awaiting_workshop');
-        } elseif ($tab === 'in_repair') {
+        } elseif ($tab === 'in_repair' || $tab === 'active') {
             $query->where('status', 'in_workshop_repair');
         } elseif ($tab === 'repaired') {
-            $query->where('status', 'workshop_repaired');
+            $query->where(function ($q) {
+                $q->where('status', 'workshop_repaired')
+                  ->orWhere(function ($sq) {
+                      $sq->where('status', 'resolved')
+                         ->whereNotNull('workshop_received_at');
+                  });
+            })->whereNull('return_dispatched_at')->where('status', '!=', 'return_transit');
         } elseif ($tab === 'return_transit') {
-            $query->where('status', 'return_transit');
+            $query->where(function ($q) {
+                $q->where('status', 'return_transit')
+                  ->orWhere(function ($sq) {
+                      $sq->whereNotNull('return_dispatched_at')
+                         ->whereNull('bank_received_at')
+                         ->whereNotIn('status', ['closed']);
+                  });
+            });
         } elseif ($tab === 'completed') {
-            $query->whereIn('status', ['resolved', 'closed'])->whereNotNull('workshop_received_at');
+            $query->where('status', 'closed')->where(function ($q) {
+                $q->whereNotNull('workshop_dispatched_at')
+                  ->orWhereNotNull('workshop_received_at');
+            });
         }
 
         if (!empty($search)) {
@@ -1482,11 +1626,26 @@ class MobileApiController extends Controller
             ->get();
 
         // Count metrics for 5 tabs
-        $awaitingIntakeCount = Ticket::where('status', 'awaiting_workshop')->count();
-        $inRepairCount       = Ticket::where('status', 'in_workshop_repair')->count();
-        $repairedCount       = Ticket::where('status', 'workshop_repaired')->count();
-        $returnTransitCount  = Ticket::where('status', 'return_transit')->count();
-        $completedCount      = Ticket::whereIn('status', ['resolved', 'closed'])->whereNotNull('workshop_received_at')->count();
+        $awaitingIntakeCount = (clone $query)->where('status', 'awaiting_workshop')->count();
+        $inRepairCount       = (clone $query)->where('status', 'in_workshop_repair')->count();
+        $repairedCount       = (clone $query)->where(function ($q) {
+            $q->where('status', 'workshop_repaired')
+              ->orWhere(function ($sq) {
+                  $sq->where('status', 'resolved')->whereNotNull('workshop_received_at');
+              });
+        })->whereNull('return_dispatched_at')->where('status', '!=', 'return_transit')->count();
+        $returnTransitCount  = (clone $query)->where(function ($q) {
+            $q->where('status', 'return_transit')
+              ->orWhere(function ($sq) {
+                  $sq->whereNotNull('return_dispatched_at')
+                     ->whereNull('bank_received_at')
+                     ->whereNotIn('status', ['closed']);
+              });
+        })->count();
+        $completedCount      = (clone $query)->where('status', 'closed')->where(function ($q) {
+            $q->whereNotNull('workshop_dispatched_at')
+              ->orWhereNotNull('workshop_received_at');
+        })->count();
 
         // Available bench engineers & incharges for modals
         $engineers = User::where('role', 'engineer')
