@@ -137,6 +137,7 @@ class Ticket extends Model
         'supporting_document',
         'resolution_document_name',
         'resolved_at',
+        'resolved_by_id',
         'closed_at',
         'created_at',
         'approval_requested_at',
@@ -385,6 +386,22 @@ class Ticket extends Model
         return $this->belongsTo(User::class, 'bank_received_confirmed_by_id');
     }
 
+    public function resolvedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'resolved_by_id');
+    }
+
+    public function getEffectiveResolvedByIdAttribute(): ?int
+    {
+        if ($this->resolved_by_id) {
+            return (int) $this->resolved_by_id;
+        }
+        if ($this->isWorkshopFlow() && $this->workshop_engineer_id) {
+            return (int) $this->workshop_engineer_id;
+        }
+        return $this->assigned_engineer_id ? (int) $this->assigned_engineer_id : null;
+    }
+
     public function feedbacks(): HasMany
     {
         return $this->hasMany(TicketFeedback::class)->orderBy('day_number', 'asc');
@@ -433,11 +450,14 @@ class Ticket extends Model
         return (int) $this->assigned_engineer_id === (int) $id;
     }
 
-    /** Tickets visible to an engineer: lead, support, or legacy assigned id. */
+    /** Tickets visible to an engineer: lead, support, workshop, or resolving engineer. */
     public function scopeForEngineer($query, int $engineerId)
     {
         return $query->where(function ($q) use ($engineerId) {
             $q->where('assigned_engineer_id', $engineerId)
+              ->orWhere('original_field_engineer_id', $engineerId)
+              ->orWhere('workshop_engineer_id', $engineerId)
+              ->orWhere('resolved_by_id', $engineerId)
               ->orWhereHas('activeTicketEngineers', fn ($e) => $e->where('engineer_id', $engineerId));
         });
     }

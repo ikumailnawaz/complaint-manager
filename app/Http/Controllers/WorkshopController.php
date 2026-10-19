@@ -278,6 +278,8 @@ class WorkshopController extends Controller
             'status'                  => 'workshop_repaired',
             'workshop_repaired_at'    => $repairedAt,
             'workshop_repair_summary' => $request->workshop_repair_summary,
+            'resolved_by_id'          => $ticket->workshop_engineer_id ?: $user->id,
+            'resolved_at'             => $ticket->resolved_at ?? $repairedAt,
         ]);
 
         TicketLog::create([
@@ -342,6 +344,7 @@ class WorkshopController extends Controller
             'bank_received_at'              => $now,
             'bank_received_confirmed_by_id' => Auth::id(),
             'resolved_at'                   => $ticket->resolved_at ?? $ticket->workshop_repaired_at ?? $now,
+            'resolved_by_id'                => $ticket->resolved_by_id ?? $ticket->workshop_engineer_id,
             'closed_at'                     => $now,
         ]);
 

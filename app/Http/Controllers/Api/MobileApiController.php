@@ -110,9 +110,20 @@ class MobileApiController extends Controller
         })->whereNotIn('status', ['resolved', 'closed'])->count();
 
         $resolvedTicketsCount = Ticket::where(function ($q) use ($user) {
-            $q->forEngineer($user->id)
-              ->orWhere('original_field_engineer_id', $user->id);
-        })->whereIn('status', ['resolved', 'closed'])->count();
+            $q->where('resolved_by_id', $user->id)
+              ->orWhere(function ($sq) use ($user) {
+                  $sq->whereNull('resolved_by_id')
+                     ->where(function ($ssq) use ($user) {
+                         $ssq->where(function ($wsq) use ($user) {
+                             $wsq->whereNotNull('workshop_engineer_id')
+                                 ->where('workshop_engineer_id', $user->id);
+                         })->orWhere(function ($fsq) use ($user) {
+                             $fsq->whereNull('workshop_engineer_id')
+                                 ->where('assigned_engineer_id', $user->id);
+                         });
+                     });
+              });
+        })->whereIn('status', ['resolved', 'closed', 'workshop_repaired', 'return_transit'])->count();
 
         $pendingExpensesCount = ExpenseClaim::where('engineer_id', $user->id)
             ->where('status', 'submitted')->count();
@@ -153,13 +164,30 @@ class MobileApiController extends Controller
 
         $query = Ticket::where(function ($q) use ($user) {
             $q->forEngineer($user->id)
-              ->orWhere('original_field_engineer_id', $user->id);
+              ->orWhere('original_field_engineer_id', $user->id)
+              ->orWhere('workshop_engineer_id', $user->id)
+              ->orWhere('resolved_by_id', $user->id);
         });
 
         if ($status === 'active') {
             $query->whereNotIn('status', ['resolved', 'closed']);
         } elseif ($status === 'resolved') {
-            $query->whereIn('status', ['resolved', 'closed']);
+            $query->whereIn('status', ['resolved', 'closed'])
+                  ->where(function ($q) use ($user) {
+                      $q->where('resolved_by_id', $user->id)
+                        ->orWhere(function ($sq) use ($user) {
+                            $sq->whereNull('resolved_by_id')
+                               ->where(function ($ssq) use ($user) {
+                                   $ssq->where(function ($wsq) use ($user) {
+                                       $wsq->whereNotNull('workshop_engineer_id')
+                                           ->where('workshop_engineer_id', $user->id);
+                                   })->orWhere(function ($fsq) use ($user) {
+                                       $fsq->whereNull('workshop_engineer_id')
+                                           ->where('assigned_engineer_id', $user->id);
+                                   });
+                               });
+                        });
+                  });
         } elseif ($status !== 'all') {
             $query->where('status', $status);
         }
@@ -178,28 +206,34 @@ class MobileApiController extends Controller
 
         return response()->json([
             'success' => true,
-            'tickets' => $tickets->map(function ($t) {
+            'tickets' => $tickets->map(function ($t) use ($user) {
                 return [
-                    'id'                 => $t->id,
-                    'ticket_no'          => $t->ticket_no,
-                    'ticket_type'        => $t->ticket_type ?? 'complaint',
-                    'customer_ref_no'    => $t->customer_ref_no,
-                    'bank_name'          => $t->bank_name,
-                    'branch_name'        => $t->branch_name,
-                    'branch_location'    => $t->branch_location,
-                    'branch_address'     => $t->branch_address,
-                    'customer_name'      => $t->customer_name,
-                    'customer_mobile'    => $t->customer_mobile,
-                    'machine_type'       => $t->machine_type,
-                    'machine_model'      => $t->machine_model,
-                    'machine_serial_no'  => $t->machine_serial_no,
-                    'warranty_status'    => $t->warranty_status,
-                    'urgency'            => $t->urgency,
-                    'status'             => $t->status,
-                    'issue_summary'      => $t->issue_summary,
-                    'sla_deadline'       => $t->sla_deadline?->format('d M Y, h:i A'),
-                    'is_sla_breached'    => $t->sla_deadline ? $t->sla_deadline->isPast() && !in_array($t->status, ['resolved', 'closed']) : false,
-                    'created_at'         => $t->created_at?->format('d M Y, h:i A'),
+                    'id'                          => $t->id,
+                    'ticket_no'                   => $t->ticket_no,
+                    'ticket_type'                 => $t->ticket_type ?? 'complaint',
+                    'customer_ref_no'             => $t->customer_ref_no,
+                    'bank_name'                   => $t->bank_name,
+                    'branch_name'                 => $t->branch_name,
+                    'branch_location'             => $t->branch_location,
+                    'branch_address'              => $t->branch_address,
+                    'customer_name'               => $t->customer_name,
+                    'customer_mobile'             => $t->customer_mobile,
+                    'machine_type'                => $t->machine_type,
+                    'machine_model'               => $t->machine_model,
+                    'machine_serial_no'           => $t->machine_serial_no,
+                    'warranty_status'             => $t->warranty_status,
+                    'urgency'                     => $t->urgency,
+                    'status'                      => $t->status,
+                    'issue_summary'               => $t->issue_summary,
+                    'can_claim_expense'           => $t->canClaimExpense($user->id),
+                    'has_active_expense'          => $t->hasActiveExpenseClaim($user->id),
+                    'original_field_engineer_id'  => $t->original_field_engineer_id,
+                    'workshop_engineer_id'        => $t->workshop_engineer_id,
+                    'workshop_received_at'        => $t->workshop_received_at?->format('d M Y, h:i A'),
+                    'resolved_by_id'              => $t->resolved_by_id,
+                    'sla_deadline'                => $t->sla_deadline?->format('d M Y, h:i A'),
+                    'is_sla_breached'             => $t->sla_deadline ? $t->sla_deadline->isPast() && !in_array($t->status, ['resolved', 'closed']) : false,
+                    'created_at'                  => $t->created_at?->format('d M Y, h:i A'),
                 ];
             }),
             'pagination' => [
@@ -501,6 +535,7 @@ class MobileApiController extends Controller
         $ticket->update([
             'status'                   => 'resolved',
             'resolved_at'              => Carbon::now(),
+            'resolved_by_id'           => $user->id,
             'resolution_summary'       => $request->resolution_summary,
             'supporting_document'      => $docPath ?: $ticket->supporting_document,
             'resolution_document_name' => $docName ?: $ticket->resolution_document_name,
@@ -1942,6 +1977,8 @@ class MobileApiController extends Controller
         $ticket->update([
             'status'                  => 'workshop_repaired',
             'workshop_repaired_at'    => $now,
+            'resolved_by_id'          => $ticket->workshop_engineer_id ?: $user->id,
+            'resolved_at'             => $ticket->resolved_at ?? $now,
             'workshop_repair_summary' => $request->workshop_repair_summary,
             'resolution_summary'      => $request->workshop_repair_summary,
         ]);

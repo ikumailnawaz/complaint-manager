@@ -999,6 +999,7 @@ class TicketController extends Controller
                 'workshop_repaired_at' => $ticket->workshop_repaired_at ?? Carbon::now(),
                 'workshop_repair_summary' => $request->resolution_summary,
                 'resolved_at' => Carbon::now(),
+                'resolved_by_id' => $ticket->workshop_engineer_id ?: $user->id,
                 'resolution_summary' => $request->resolution_summary,
                 'supporting_document' => $docPath,
                 'resolution_document_name' => $docName,
@@ -1026,6 +1027,7 @@ class TicketController extends Controller
         $ticket->update([
             'status' => 'resolved',
             'resolved_at' => Carbon::now(),
+            'resolved_by_id' => $user->id,
             'resolution_summary' => $request->resolution_summary,
             'supporting_document' => $docPath,
             'resolution_document_name' => $docName,

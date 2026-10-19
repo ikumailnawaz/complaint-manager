@@ -337,33 +337,45 @@ class ReportController extends Controller
 
         if ($activeTab === 'engineer_parts' || $activeTab === 'overview') {
             $engineerTatMetrics = $engineers->map(function ($eng) use ($allTickets, $expenses) {
-                $engTickets = $allTickets->filter(fn($t) => (int)$t->assigned_engineer_id === $eng->id || (int)$t->original_field_engineer_id === $eng->id);
-                $totalAssigned = $engTickets->count();
-                $complaintsAssigned = $engTickets->filter(fn($t) => ($t->ticket_type ?? 'complaint') !== 'installation')->count();
-                $installationsAssigned = $engTickets->filter(fn($t) => ($t->ticket_type ?? 'complaint') === 'installation')->count();
+                $engAssignedTickets = $allTickets->filter(fn($t) => (int)$t->assigned_engineer_id === $eng->id || (int)$t->original_field_engineer_id === $eng->id || (int)$t->workshop_engineer_id === $eng->id);
+                $totalAssigned = $engAssignedTickets->count();
+                $complaintsAssigned = $engAssignedTickets->filter(fn($t) => ($t->ticket_type ?? 'complaint') !== 'installation')->count();
+                $installationsAssigned = $engAssignedTickets->filter(fn($t) => ($t->ticket_type ?? 'complaint') === 'installation')->count();
 
                 $inTatResolved = 0;
                 $outTatResolved = 0;
                 $totalMins = 0;
                 $resolvedCount = 0;
 
-                foreach ($engTickets as $t) {
-                    $isResolved = in_array($t->status, ['resolved', 'closed']);
-                    if ($isResolved) {
-                        $resolvedAt = $t->resolved_at ?? $t->updated_at ?? $t->created_at;
-                        $durationMins = $t->created_at->diffInMinutes($resolvedAt);
-                        $totalMins += $durationMins;
-                        $resolvedCount++;
+                // Tickets accurately resolved by this engineer (either field on-site or workshop bench)
+                $engResolvedTickets = $allTickets->filter(function($t) use ($eng) {
+                    if (!in_array($t->status, ['resolved', 'closed', 'workshop_repaired', 'return_transit'])) {
+                        return false;
+                    }
+                    if ($t->resolved_by_id) {
+                        return (int)$t->resolved_by_id === $eng->id;
+                    }
+                    if ($t->workshop_engineer_id) {
+                        return (int)$t->workshop_engineer_id === $eng->id;
+                    }
+                    return (int)$t->assigned_engineer_id === $eng->id;
+                });
 
-                        if (!$t->sla_deadline || $resolvedAt <= $t->sla_deadline) {
-                            $inTatResolved++;
-                        } else {
-                            $outTatResolved++;
-                        }
+                foreach ($engResolvedTickets as $t) {
+                    $resolvedAt = $t->resolved_at ?? $t->workshop_repaired_at ?? $t->updated_at ?? $t->created_at;
+                    $durationMins = $t->created_at->diffInMinutes($resolvedAt);
+                    $totalMins += $durationMins;
+                    $resolvedCount++;
+
+                    $deadline = $t->workshop_tat_deadline ?? $t->sla_deadline;
+                    if (!$deadline || $resolvedAt <= $deadline) {
+                        $inTatResolved++;
+                    } else {
+                        $outTatResolved++;
                     }
                 }
 
-                $activeBreached = $engTickets->filter(fn($t) => !in_array($t->status, ['resolved', 'closed']) && $t->sla_deadline && $t->sla_deadline < now())->count();
+                $activeBreached = $engAssignedTickets->filter(fn($t) => !in_array($t->status, ['resolved', 'closed', 'workshop_repaired', 'return_transit']) && $t->sla_deadline && $t->sla_deadline < now())->count();
                 $totalResolved = $inTatResolved + $outTatResolved;
                 $tatComplianceRate = $totalResolved > 0 ? round(($inTatResolved / $totalResolved) * 100, 1) : 100.0;
                 $avgTatHours = $resolvedCount > 0 ? round(($totalMins / $resolvedCount) / 60, 1) : 0.0;

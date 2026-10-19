@@ -96,9 +96,20 @@ class DashboardController extends Controller
         $stats = [
             'active_tickets' => $myTickets->whereIn('status', ['assigned', 'in_progress', 'awaiting_approval', 'awaiting_workshop', 'in_workshop_repair', 'workshop_repaired', 'return_transit', 'escalated'])->count(),
             'resolved_tickets' => Ticket::where(function ($q) use ($engineer) {
-                $q->forEngineer($engineer->id)
-                  ->orWhere('original_field_engineer_id', $engineer->id);
-            })->whereIn('status', ['resolved', 'closed'])->count(),
+                $q->where('resolved_by_id', $engineer->id)
+                  ->orWhere(function ($sq) use ($engineer) {
+                      $sq->whereNull('resolved_by_id')
+                         ->where(function ($ssq) use ($engineer) {
+                             $ssq->where(function ($wsq) use ($engineer) {
+                                 $wsq->whereNotNull('workshop_engineer_id')
+                                     ->where('workshop_engineer_id', $engineer->id);
+                             })->orWhere(function ($fsq) use ($engineer) {
+                                 $fsq->whereNull('workshop_engineer_id')
+                                     ->where('assigned_engineer_id', $engineer->id);
+                             });
+                         });
+                  });
+            })->whereIn('status', ['resolved', 'closed', 'workshop_repaired', 'return_transit'])->count(),
             'pending_expenses' => ExpenseClaim::where('engineer_id', $engineer->id)->where('status', 'submitted')->count(),
             'approved_expenses' => ExpenseClaim::where('engineer_id', $engineer->id)->whereIn('status', ['approved', 'paid'])->count(),
         ];
