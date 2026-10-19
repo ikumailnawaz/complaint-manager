@@ -12,6 +12,7 @@ class PartRequest extends Model {
         'fault_description', 'status', 'fault_video_path',
         'additional_machine_model_id', 'additional_machine_model', 'additional_machine_serial_no',
         'additional_machine_type', 'additional_fault_description', 'additional_fault_video_path',
+        'additional_machines',
         'stock_verified_by_id', 'stock_verified_at', 'stock_remarks',
         'approved_by_id', 'approved_at', 'approval_remarks',
         'rejected_by_id', 'rejected_at', 'rejection_reason',
@@ -24,6 +25,7 @@ class PartRequest extends Model {
         'stock_verified_at' => 'datetime', 'approved_at' => 'datetime',
         'rejected_at' => 'datetime', 'dispatched_at' => 'datetime',
         'faulty_returned_at' => 'datetime',
+        'additional_machines' => 'array',
     ];
     
     public function ticket(): BelongsTo { return $this->belongsTo(Ticket::class); }
@@ -31,7 +33,28 @@ class PartRequest extends Model {
     public function machineModel(): BelongsTo { return $this->belongsTo(MachineModel::class); }
     public function additionalMachineModel(): BelongsTo { return $this->belongsTo(MachineModel::class, 'additional_machine_model_id'); }
     public function hasAdditionalMachine(): bool {
-        return !empty($this->additional_machine_model) || !empty($this->additional_machine_model_id) || !empty($this->additional_machine_serial_no);
+        return !empty($this->additional_machines) ||
+               !empty($this->additional_machine_model) ||
+               !empty($this->additional_machine_model_id) ||
+               !empty($this->additional_machine_serial_no);
+    }
+
+    public function getAdditionalMachinesListAttribute(): array {
+        if (!empty($this->additional_machines) && is_array($this->additional_machines)) {
+            return array_values($this->additional_machines);
+        }
+        if (!empty($this->additional_machine_model) || !empty($this->additional_machine_model_id) || !empty($this->additional_machine_serial_no)) {
+            return [[
+                'id'                => 1,
+                'model_id'          => $this->additional_machine_model_id,
+                'model_name'        => $this->additionalMachineModel?->name ?? $this->additional_machine_model,
+                'serial_no'         => $this->additional_machine_serial_no,
+                'machine_type'      => $this->additional_machine_type,
+                'fault_description' => $this->additional_fault_description,
+                'fault_video_url'   => $this->additional_fault_video_path ? asset('storage/' . $this->additional_fault_video_path) : null,
+            ]];
+        }
+        return [];
     }
     public function stockVerifiedBy(): BelongsTo { return $this->belongsTo(User::class, 'stock_verified_by_id'); }
     public function approvedBy(): BelongsTo { return $this->belongsTo(User::class, 'approved_by_id'); }

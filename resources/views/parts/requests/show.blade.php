@@ -188,89 +188,76 @@
         </div>
     </div>
 
-    {{-- Additional Machine at Same Site --}}
-    @if($partRequest->hasAdditionalMachine())
-        <div class="bg-gradient-to-r from-indigo-50/80 via-white to-purple-50/80 rounded-xl shadow-xs border border-indigo-200 p-5 mb-5">
-            <div class="flex flex-wrap items-center justify-between gap-2 mb-3 pb-2 border-b border-indigo-100">
-                <div class="flex items-center space-x-2">
-                    <span class="w-7 h-7 rounded-lg bg-indigo-600 text-white flex items-center justify-center text-xs font-bold shadow-xs">
-                        <i class="fa-solid fa-screwdriver-wrench"></i>
+    {{-- Additional Machines at Same Site --}}
+    @php
+        $addMachines = $partRequest->additional_machines_list;
+    @endphp
+    @if(!empty($addMachines))
+        @foreach($addMachines as $mIdx => $addM)
+            <div class="bg-gradient-to-r from-indigo-50/80 via-white to-purple-50/80 rounded-xl shadow-xs border border-indigo-200 p-5 mb-5">
+                <div class="flex flex-wrap items-center justify-between gap-2 mb-3 pb-2 border-b border-indigo-100">
+                    <div class="flex items-center space-x-2">
+                        <span class="w-7 h-7 rounded-lg bg-indigo-600 text-white flex items-center justify-center text-xs font-bold shadow-xs">
+                            {{ $mIdx + 2 }}
+                        </span>
+                        <div>
+                            <h4 class="text-sm font-extrabold text-indigo-950">Additional Broken Machine #{{ $mIdx + 2 }} (Shared Visit)</h4>
+                            <p class="text-[11px] text-indigo-600">Parts requested simultaneously during the same on-site visit</p>
+                        </div>
+                    </div>
+                    <span class="px-2.5 py-1 rounded-full text-xs font-extrabold bg-indigo-100 text-indigo-900 border border-indigo-300">
+                        <i class="fa-solid fa-route mr-1"></i> Shared Tour &bull; Expense Claimable for Both
                     </span>
-                    <div>
-                        <h4 class="text-sm font-extrabold text-indigo-950">Additional Broken Machine at Site (Shared Visit)</h4>
-                        <p class="text-[11px] text-indigo-600">Parts requested simultaneously during the same on-site visit</p>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs mb-3">
+                    <div class="p-3 bg-white/80 rounded-lg border border-indigo-100">
+                        <span class="text-slate-400 block text-[10px] uppercase font-bold">Additional Machine Model</span>
+                        <strong class="text-slate-800 text-sm">{{ $addM['model_name'] ?? 'Specified Model' }}</strong>
+                    </div>
+                    <div class="p-3 bg-white/80 rounded-lg border border-indigo-100">
+                        <span class="text-slate-400 block text-[10px] uppercase font-bold">Machine Serial Number</span>
+                        <strong class="font-mono text-slate-800 text-sm">{{ $addM['serial_no'] ?? 'N/A' }}</strong>
+                    </div>
+                    <div class="p-3 bg-white/80 rounded-lg border border-indigo-100">
+                        <span class="text-slate-400 block text-[10px] uppercase font-bold">Machine Equipment Type</span>
+                        <strong class="text-slate-800 text-sm">{{ $addM['machine_type'] ?? 'Equipment' }}</strong>
                     </div>
                 </div>
-                <span class="px-2.5 py-1 rounded-full text-xs font-extrabold bg-indigo-100 text-indigo-900 border border-indigo-300">
-                    <i class="fa-solid fa-route mr-1"></i> Shared Tour &bull; Expense Claimable for Both
-                </span>
+
+                @if(!empty($addM['fault_description']))
+                    <div class="p-3 bg-white/80 rounded-lg border border-indigo-100 text-xs mb-3">
+                        <span class="text-slate-500 font-bold block mb-0.5">Additional Machine Fault Notes:</span>
+                        <p class="text-slate-700 italic">{{ $addM['fault_description'] }}</p>
+                    </div>
+                @endif
+
+                @php
+                    $vUrl = !empty($addM['fault_video_url']) ? $addM['fault_video_url'] : (!empty($addM['fault_video_path']) ? asset('storage/' . $addM['fault_video_path']) : null);
+                @endphp
+                @if($vUrl)
+                    <div class="pt-3 border-t border-indigo-100 flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                            <span class="text-xs font-bold text-indigo-900 flex items-center gap-1.5">
+                                <i class="fa-solid fa-video text-indigo-600"></i> Diagnostic Video Evidence
+                            </span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <a href="{{ $vUrl }}" target="_blank"
+                               class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold shadow-xs transition">
+                                <i class="fas fa-play"></i> Watch Video
+                            </a>
+                        </div>
+                    </div>
+                    <div class="mt-3 max-w-xl bg-black rounded-lg overflow-hidden shadow">
+                        <video controls playsinline preload="metadata" class="w-full max-h-[320px]">
+                            <source src="{{ $vUrl }}">
+                            Your browser does not support the video tag.
+                        </video>
+                    </div>
+                @endif
             </div>
-
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs mb-3">
-                <div class="p-3 bg-white/80 rounded-lg border border-indigo-100">
-                    <span class="text-slate-400 block text-[10px] uppercase font-bold">Additional Machine Model</span>
-                    <strong class="text-slate-800 text-sm">{{ $partRequest->additionalMachineModel?->name ?? $partRequest->additional_machine_model ?? 'Specified Model' }}</strong>
-                </div>
-                <div class="p-3 bg-white/80 rounded-lg border border-indigo-100">
-                    <span class="text-slate-400 block text-[10px] uppercase font-bold">Machine Serial Number</span>
-                    <strong class="font-mono text-slate-800 text-sm">{{ $partRequest->additional_machine_serial_no ?? 'N/A' }}</strong>
-                </div>
-                <div class="p-3 bg-white/80 rounded-lg border border-indigo-100">
-                    <span class="text-slate-400 block text-[10px] uppercase font-bold">Machine Equipment Type</span>
-                    <strong class="text-slate-800 text-sm">{{ $partRequest->additional_machine_type ?? 'Equipment' }}</strong>
-                </div>
-            </div>
-
-            @if($partRequest->additional_fault_description)
-                <div class="p-3 bg-white/80 rounded-lg border border-indigo-100 text-xs mb-3">
-                    <span class="text-slate-500 font-bold block mb-0.5">Additional Machine Fault Notes:</span>
-                    <p class="text-slate-700 italic">{{ $partRequest->additional_fault_description }}</p>
-                </div>
-            @endif
-
-            {{-- Video Evidence for Additional Machine --}}
-            <div class="pt-3 border-t border-indigo-100 flex flex-wrap items-center justify-between gap-3">
-                <div>
-                    <span class="text-xs font-bold text-indigo-900 flex items-center gap-1.5">
-                        <i class="fa-solid fa-video text-indigo-600"></i> Additional Machine Diagnostic Video
-                    </span>
-                    @if($partRequest->additional_fault_video_path)
-                        <span class="text-[11px] text-slate-500 block font-mono">{{ basename($partRequest->additional_fault_video_path) }}</span>
-                    @else
-                        <span class="text-[11px] text-slate-400 block italic">No video uploaded yet for additional machine.</span>
-                    @endif
-                </div>
-
-                <div class="flex items-center gap-2">
-                    @if($partRequest->additional_fault_video_path)
-                        <a href="{{ route('parts.requests.additional-video', $partRequest) }}" target="_blank"
-                           class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-xs font-semibold transition">
-                            <i class="fas fa-up-right-from-square"></i> Open Video
-                        </a>
-                        <a href="{{ route('parts.requests.additional-video.download', $partRequest) }}"
-                           class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold shadow-xs transition">
-                            <i class="fas fa-download"></i> Download Video
-                        </a>
-                    @endif
-
-                    @if(!in_array($partRequest->status, ['approved', 'dispatched']) && (auth()->user()->isOfficeStaff() || auth()->user()->isSuperior() || (auth()->user()->isEngineer() && auth()->id() === $partRequest->engineer_id)))
-                        <button type="button" onclick="openUpdateVideoModal('additional')"
-                                class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-semibold shadow-xs transition cursor-pointer">
-                            <i class="fas fa-cloud-arrow-up"></i> {{ $partRequest->additional_fault_video_path ? 'Update Video' : 'Upload Video' }}
-                        </button>
-                    @endif
-                </div>
-            </div>
-
-            @if($partRequest->additional_fault_video_path)
-                <div class="mt-3 max-w-2xl bg-black rounded-lg overflow-hidden shadow">
-                    <video controls playsinline preload="metadata" class="w-full max-h-[360px]">
-                        <source src="{{ route('parts.requests.additional-video', $partRequest) }}">
-                        Your browser does not support the video tag.
-                    </video>
-                </div>
-            @endif
-        </div>
+        @endforeach
     @endif
 
     {{-- Parts Table --}}

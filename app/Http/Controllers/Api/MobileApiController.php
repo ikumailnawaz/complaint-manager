@@ -352,7 +352,8 @@ class MobileApiController extends Controller
                         'machine_model'               => $pr->machineModel?->name ?? $ticket->machine_model,
                         'machine_serial_no'           => $pr->machine_serial_no ?? $ticket->machine_serial_no,
                         'fault_description'           => $pr->fault_description,
-                        'has_additional_machine'      => (bool)(!empty($pr->additional_machine_model_id) || !empty($pr->additional_machine_serial_no) || !empty($pr->additional_machine_model)),
+                        'has_additional_machine'      => $pr->hasAdditionalMachine(),
+                        'additional_machines'         => $pr->additional_machines_list,
                         'additional_machine_model_id' => $pr->additional_machine_model_id,
                         'additional_machine_model'    => $pr->additional_machine_model,
                         'additional_machine_serial_no'=> $pr->additional_machine_serial_no,
@@ -1203,7 +1204,8 @@ class MobileApiController extends Controller
                     'machine_model'               => $pr->machineModel?->name ?? $pr->ticket?->machine_model,
                     'machine_serial_no'           => $pr->machine_serial_no ?? $pr->ticket?->machine_serial_no,
                     'fault_description'           => $pr->fault_description,
-                    'has_additional_machine'      => (bool)(!empty($pr->additional_machine_model_id) || !empty($pr->additional_machine_serial_no) || !empty($pr->additional_machine_model)),
+                    'has_additional_machine'      => $pr->hasAdditionalMachine(),
+                    'additional_machines'         => $pr->additional_machines_list,
                     'additional_machine_model_id' => $pr->additional_machine_model_id,
                     'additional_machine_model'    => $pr->additional_machine_model,
                     'additional_machine_serial_no'=> $pr->additional_machine_serial_no,
@@ -1368,12 +1370,42 @@ class MobileApiController extends Controller
         }
 
         $pr = \Illuminate\Support\Facades\DB::transaction(function () use ($request, $user, $ticket) {
-            $hasAdditional = !empty($request->has_additional_machine) || !empty($request->additional_machine_model_id) || !empty($request->additional_machine_serial_no);
-
-            $additionalVideoPath = null;
-            if ($request->hasFile('additional_fault_video')) {
-                $additionalVideoPath = $request->file('additional_fault_video')->store('part-requests/videos', 'public');
+            // Parse additional machines (supports arbitrary multiple machines: 1, 2, 3, 4, 5...)
+            $additionalMachines = [];
+            if ($request->has('additional_machines')) {
+                $raw = $request->input('additional_machines');
+                if (is_string($raw)) {
+                    $additionalMachines = json_decode($raw, true) ?: [];
+                } elseif (is_array($raw)) {
+                    $additionalMachines = $raw;
+                }
             }
+
+            // Fallback for legacy single additional machine fields
+            if (empty($additionalMachines) && (!empty($request->additional_machine_model_id) || !empty($request->additional_machine_serial_no) || !empty($request->additional_machine_model))) {
+                $additionalMachines = [[
+                    'id'                => 1,
+                    'model_id'          => $request->additional_machine_model_id ?: null,
+                    'model_name'        => $request->additional_machine_model ?: null,
+                    'serial_no'         => $request->additional_machine_serial_no ?: null,
+                    'machine_type'      => $request->additional_machine_type ?: null,
+                    'fault_description' => $request->additional_fault_description ?: null,
+                ]];
+            }
+
+            // Handle video uploads for each additional machine
+            foreach ($additionalMachines as $idx => &$m) {
+                $videoKey = "additional_fault_video_{$idx}";
+                if ($request->hasFile($videoKey)) {
+                    $m['fault_video_path'] = $request->file($videoKey)->store('part-requests/videos', 'public');
+                } elseif ($idx === 0 && $request->hasFile('additional_fault_video')) {
+                    $m['fault_video_path'] = $request->file('additional_fault_video')->store('part-requests/videos', 'public');
+                }
+            }
+            unset($m);
+
+            $hasAdditional = !empty($additionalMachines);
+            $firstAdditional = $hasAdditional ? $additionalMachines[0] : null;
 
             $pr = PartRequest::create([
                 'request_number'    => PartRequest::generateRequestNumber(),
@@ -1382,12 +1414,13 @@ class MobileApiController extends Controller
                 'machine_model_id'  => $request->machine_model_id ?: null,
                 'machine_serial_no' => $request->machine_serial_no ?: $ticket->machine_serial_no,
                 'fault_description' => $request->fault_description,
-                'additional_machine_model_id'  => $hasAdditional ? ($request->additional_machine_model_id ?: null) : null,
-                'additional_machine_model'     => $hasAdditional ? ($request->additional_machine_model ?: null) : null,
-                'additional_machine_serial_no' => $hasAdditional ? ($request->additional_machine_serial_no ?: null) : null,
-                'additional_machine_type'      => $hasAdditional ? ($request->additional_machine_type ?: null) : null,
-                'additional_fault_description' => $hasAdditional ? ($request->additional_fault_description ?: null) : null,
-                'additional_fault_video_path'  => $hasAdditional ? $additionalVideoPath : null,
+                'additional_machines'          => $hasAdditional ? $additionalMachines : null,
+                'additional_machine_model_id'  => $firstAdditional['model_id'] ?? null,
+                'additional_machine_model'     => $firstAdditional['model_name'] ?? null,
+                'additional_machine_serial_no' => $firstAdditional['serial_no'] ?? null,
+                'additional_machine_type'      => $firstAdditional['machine_type'] ?? null,
+                'additional_fault_description' => $firstAdditional['fault_description'] ?? null,
+                'additional_fault_video_path'  => $firstAdditional['fault_video_path'] ?? null,
                 'status'            => 'pending_stock_check',
             ]);
 
@@ -1465,24 +1498,61 @@ class MobileApiController extends Controller
         }
 
         \Illuminate\Support\Facades\DB::transaction(function () use ($request, $user, $pr) {
-            $hasAdditional = !empty($request->has_additional_machine) || !empty($request->additional_machine_model_id) || !empty($request->additional_machine_serial_no);
-
-            $additionalVideoPath = $pr->additional_fault_video_path;
-            if ($request->hasFile('additional_fault_video')) {
-                $additionalVideoPath = $request->file('additional_fault_video')->store('part-requests/videos', 'public');
+            // Parse additional machines
+            $additionalMachines = [];
+            if ($request->has('additional_machines')) {
+                $raw = $request->input('additional_machines');
+                if (is_string($raw)) {
+                    $additionalMachines = json_decode($raw, true) ?: [];
+                } elseif (is_array($raw)) {
+                    $additionalMachines = $raw;
+                }
             }
 
-            $pr->update([
+            if (empty($additionalMachines) && (!empty($request->additional_machine_model_id) || !empty($request->additional_machine_serial_no) || !empty($request->additional_machine_model))) {
+                $additionalMachines = [[
+                    'id'                => 1,
+                    'model_id'          => $request->additional_machine_model_id ?: null,
+                    'model_name'        => $request->additional_machine_model ?: null,
+                    'serial_no'         => $request->additional_machine_serial_no ?: null,
+                    'machine_type'      => $request->additional_machine_type ?: null,
+                    'fault_description' => $request->additional_fault_description ?: null,
+                ]];
+            }
+
+            foreach ($additionalMachines as $idx => &$m) {
+                $videoKey = "additional_fault_video_{$idx}";
+                if ($request->hasFile($videoKey)) {
+                    $m['fault_video_path'] = $request->file($videoKey)->store('part-requests/videos', 'public');
+                } elseif ($idx === 0 && $request->hasFile('additional_fault_video')) {
+                    $m['fault_video_path'] = $request->file('additional_fault_video')->store('part-requests/videos', 'public');
+                } elseif (!empty($m['existing_video_path'])) {
+                    $m['fault_video_path'] = $m['existing_video_path'];
+                } elseif ($idx === 0 && !empty($pr->additional_fault_video_path)) {
+                    $m['fault_video_path'] = $pr->additional_fault_video_path;
+                }
+            }
+            unset($m);
+
+            $hasAdditional = !empty($additionalMachines);
+            $firstAdditional = $hasAdditional ? $additionalMachines[0] : null;
+
+            $updateData = [
                 'machine_model_id'             => $request->machine_model_id ?: $pr->machine_model_id,
                 'machine_serial_no'            => $request->machine_serial_no ?: $pr->machine_serial_no,
                 'fault_description'            => $request->fault_description,
-                'additional_machine_model_id'  => $hasAdditional ? ($request->additional_machine_model_id ?: null) : null,
-                'additional_machine_model'     => $hasAdditional ? ($request->additional_machine_model ?: null) : null,
-                'additional_machine_serial_no' => $hasAdditional ? ($request->additional_machine_serial_no ?: null) : null,
-                'additional_machine_type'      => $hasAdditional ? ($request->additional_machine_type ?: null) : null,
-                'additional_fault_description' => $hasAdditional ? ($request->additional_fault_description ?: null) : null,
-                'additional_fault_video_path'  => $hasAdditional ? $additionalVideoPath : null,
-            ]);
+                'additional_machines'          => $hasAdditional ? $additionalMachines : null,
+                'additional_machine_model_id'  => $firstAdditional['model_id'] ?? null,
+                'additional_machine_model'     => $firstAdditional['model_name'] ?? null,
+                'additional_machine_serial_no' => $firstAdditional['serial_no'] ?? null,
+                'additional_machine_type'      => $firstAdditional['machine_type'] ?? null,
+                'additional_fault_description' => $firstAdditional['fault_description'] ?? null,
+            ];
+            if (!empty($firstAdditional['fault_video_path'])) {
+                $updateData['additional_fault_video_path'] = $firstAdditional['fault_video_path'];
+            }
+
+            $pr->update($updateData);
 
             // Re-sync items
             $pr->items()->delete();
