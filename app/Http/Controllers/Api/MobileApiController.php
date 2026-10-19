@@ -202,7 +202,8 @@ class MobileApiController extends Controller
             });
         }
 
-        $tickets = $query->latest()->paginate(15);
+        $perPage = min((int) $request->input('per_page', 50), 150);
+        $tickets = $query->latest()->paginate($perPage);
 
         return response()->json([
             'success' => true,
@@ -334,16 +335,22 @@ class MobileApiController extends Controller
                         'submitted_at'   => $f->submitted_at?->format('d M Y, h:i A') ?? $f->created_at?->format('d M Y, h:i A'),
                     ];
                 }),
-                'part_requests'      => $ticket->partRequests->map(function ($pr) {
+                'part_requests'      => $ticket->partRequests->map(function ($pr) use ($ticket) {
                     return [
                         'id'                          => $pr->id,
                         'request_no'                  => $pr->request_number,
+                        'ticket_id'                   => $pr->ticket_id ?? $ticket->id,
+                        'ticket_no'                   => $ticket->ticket_no,
+                        'ticket_type'                 => $ticket->ticket_type ?? 'complaint',
+                        'bank_name'                   => $ticket->bank_name,
+                        'branch_name'                 => $ticket->branch_name,
+                        'branch_location'             => $ticket->branch_location,
                         'status'                      => $pr->status,
                         'status_label'                => $pr->status_label,
                         'can_edit'                    => $pr->status === 'pending_stock_check',
                         'machine_model_id'            => $pr->machine_model_id,
-                        'machine_model'               => $pr->machineModel?->name,
-                        'machine_serial_no'           => $pr->machine_serial_no,
+                        'machine_model'               => $pr->machineModel?->name ?? $ticket->machine_model,
+                        'machine_serial_no'           => $pr->machine_serial_no ?? $ticket->machine_serial_no,
                         'fault_description'           => $pr->fault_description,
                         'has_additional_machine'      => (bool)(!empty($pr->additional_machine_model_id) || !empty($pr->additional_machine_serial_no) || !empty($pr->additional_machine_model)),
                         'additional_machine_model_id' => $pr->additional_machine_model_id,
@@ -1191,9 +1198,10 @@ class MobileApiController extends Controller
                     'ticket_type'                 => $pr->ticket?->ticket_type ?? 'complaint',
                     'bank_name'                   => $pr->ticket?->bank_name,
                     'branch_name'                 => $pr->ticket?->branch_name,
+                    'branch_location'             => $pr->ticket?->branch_location,
                     'machine_model_id'            => $pr->machine_model_id,
-                    'machine_model'               => $pr->machineModel?->name,
-                    'machine_serial_no'           => $pr->machine_serial_no,
+                    'machine_model'               => $pr->machineModel?->name ?? $pr->ticket?->machine_model,
+                    'machine_serial_no'           => $pr->machine_serial_no ?? $pr->ticket?->machine_serial_no,
                     'fault_description'           => $pr->fault_description,
                     'has_additional_machine'      => (bool)(!empty($pr->additional_machine_model_id) || !empty($pr->additional_machine_serial_no) || !empty($pr->additional_machine_model)),
                     'additional_machine_model_id' => $pr->additional_machine_model_id,
