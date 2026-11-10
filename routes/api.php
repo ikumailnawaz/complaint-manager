@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\AfterSalesAuditApiController;
 use App\Http\Controllers\Api\MobileApiController;
 use App\Http\Controllers\Api\TicketIngestController;
 use Illuminate\Http\Request;
@@ -11,6 +12,12 @@ use Illuminate\Support\Facades\Route;
 |--------------------------------------------------------------------------
 | All routes are prefixed with /api
 */
+
+// Read-Only After-Sales Monitoring & Escalations Audit API (Financial Audit & Inventory Suite Integration)
+Route::prefix('v1/audit')->group(function () {
+    Route::get('/after-sales', [AfterSalesAuditApiController::class, 'index'])->name('api.audit.after-sales.index');
+    Route::get('/after-sales/{id}', [AfterSalesAuditApiController::class, 'show'])->whereNumber('id')->name('api.audit.after-sales.show');
+});
 
 // Public Authentication Endpoint
 Route::prefix('v1/auth')->group(function () {
